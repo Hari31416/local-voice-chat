@@ -1,4 +1,4 @@
-# AI Voice Chat - 100% In-Browser
+# WebVoice - 100% In-Browser AI Voice Chat
 
 A hands-free AI voice assistant that runs entirely in your browser. Speech recognition, LLM, and text-to-speech all run locally using WebGPU — no API keys, no server, no data leaves your device.
 

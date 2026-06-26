@@ -704,7 +704,7 @@ export default function App() {
         <ConversationContent className="max-w-2xl mx-auto">
           {messages.length === 0 ? (
             <div className="text-center py-10 max-w-xl mx-auto">
-              <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-red-500">AI Voice Chat</h1>
+              <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-red-500">WebVoice</h1>
               <p className="text-zinc-400 text-sm mb-8">100% in-browser LLM, VAD, STT, and TTS — nothing leaves your device</p>
 
               {status === 'idle' && !hasUserSelected ? (

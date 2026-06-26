@@ -1,9 +1,9 @@
 {
-  "name": "voice-agent-in-browser",
+  "name": "local-voice-chat",
   "version": "0.2.0",
   "private": false,
   "type": "module",
-  "description": "Browser-based voice chat with local STT, pluggable LLM, and Supertonic 3 TTS",
+  "description": "WebVoice: 100% locally running in-browser voice assistant with local STT, LLM, and TTS",
   "license": "MIT",
   "scripts": {
     "dev": "vite",
