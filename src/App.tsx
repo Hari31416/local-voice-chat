@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { LiveWaveform } from '@/components/ui/live-waveform'
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ui/conversation'
 import { Message, MessageContent } from '@/components/ui/message'
-import { Mic, MicOff, Volume2, VolumeX, Phone, PhoneOff, ChevronDown, Settings, X, Camera } from 'lucide-react'
+import { Mic, MicOff, Volume2, VolumeX, Phone, PhoneOff, ChevronDown, Settings, X, Camera, RotateCcw } from 'lucide-react'
 import { useTTS, type TTSVoice, type TTSLanguage } from '@/hooks/use-tts'
 import { useGemma4 } from '@/hooks/use-gemma4'
 import { useWebLLM } from '@/hooks/use-webllm'
@@ -794,14 +794,29 @@ export default function App() {
         </div>
       )}
 
-      {/* Debug toggle button */}
-      <button
-        onClick={() => setShowDebugPanel(!showDebugPanel)}
-        className="fixed top-4 right-4 p-2 bg-zinc-800 rounded-full text-zinc-400 hover:text-white z-40"
-        title="Toggle debug panel"
-      >
-        <Settings className="h-4 w-4" />
-      </button>
+      {/* Top action buttons */}
+      <div className="fixed top-4 right-4 flex gap-2 z-40">
+        {messages.length > 0 && (
+          <button
+            onClick={() => {
+              setMessages([])
+              setPendingImage(null)
+              tts.stop()
+            }}
+            className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-400 hover:text-white transition-colors"
+            title="Clear conversation"
+          >
+            <RotateCcw className="h-4 w-4" />
+          </button>
+        )}
+        <button
+          onClick={() => setShowDebugPanel(!showDebugPanel)}
+          className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-400 hover:text-white transition-colors"
+          title="Toggle debug panel"
+        >
+          <Settings className="h-4 w-4" />
+        </button>
+      </div>
 
       {/* Fixed bottom bar */}
       <div className="fixed bottom-0 left-0 right-0 p-4">
