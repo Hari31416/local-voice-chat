@@ -699,11 +699,10 @@ export default function App() {
 
   return (
     <div className="h-screen bg-zinc-950 flex flex-col">
-      {/* Conversation area with auto-scroll */}
       <Conversation className="flex-1 pb-32">
-        <ConversationContent className="max-w-2xl mx-auto">
+        <ConversationContent className={cn("max-w-2xl mx-auto", messages.length === 0 ? "min-h-full flex flex-col justify-center" : "pt-16")}>
           {messages.length === 0 ? (
-            <div className="text-center py-10 max-w-xl mx-auto">
+            <div className="text-center py-10 max-w-xl mx-auto w-full">
               <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-red-500">WebVoice</h1>
               <p className="text-zinc-400 text-sm mb-8">100% in-browser LLM, VAD, STT, and TTS — nothing leaves your device</p>
 
@@ -868,17 +867,70 @@ export default function App() {
       {/* Fixed bottom bar */}
       <div className="fixed bottom-0 left-0 right-0 p-4">
         <div className="max-w-2xl mx-auto">
-          <div className="bg-zinc-800/90 backdrop-blur-xl rounded-2xl border border-zinc-700/50 p-3 shadow-2xl">
-            {/* Text input / Status area */}
+          <div className="bg-zinc-800/95 backdrop-blur-xl rounded-2xl border border-zinc-700/50 p-3 shadow-2xl">
             {isCallActive ? (
-              <div className="text-zinc-500 text-sm mb-3 px-2">
-                {status === "listening" ? "Listening..." : status === "recording" ? "Recording..." : status === "thinking" ? "Thinking..." : status === "speaking" ? "Speaking..." : "..."}
+              /* Voice Mode: Centered waveform and voice controls */
+              <div className="flex flex-col gap-3">
+                <div className="text-zinc-400 text-xs px-2 text-center font-medium animate-pulse">
+                  {status === "listening" ? "Listening..." : status === "recording" ? "Recording..." : status === "thinking" ? "Thinking..." : status === "speaking" ? "Speaking..." : "..."}
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  {/* Waveform */}
+                  <div className="flex-1 min-w-0 h-10 flex items-center">
+                    <LiveWaveform
+                      active={waveformActive}
+                      processing={waveformProcessing}
+                      barWidth={3}
+                      barGap={2}
+                      barRadius={1.5}
+                      fadeEdges={true}
+                      fadeWidth={24}
+                      sensitivity={2.5}
+                      smoothingTimeConstant={0.8}
+                      height={32}
+                      mode="static"
+                      className={cn("w-full", waveformActive ? "text-green-400" : waveformProcessing ? "text-blue-400" : "text-zinc-600")}
+                    />
+                  </div>
+                  {/* Voice controls */}
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <Button
+                      onClick={toggleMicMute}
+                      size="icon"
+                      variant="ghost"
+                      className={`h-10 w-10 rounded-full flex-shrink-0 ${isMicMuted ? "bg-red-500/20 text-red-400 hover:bg-red-500/30" : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700"
+                        }`}
+                      title={isMicMuted ? "Unmute mic" : "Mute mic"}
+                    >
+                      {isMicMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                    </Button>
+                    <Button
+                      onClick={() => tts.setMuted(!tts.muted)}
+                      size="icon"
+                      variant="ghost"
+                      className={`h-10 w-10 rounded-full flex-shrink-0 ${tts.muted ? "bg-red-500/20 text-red-400 hover:bg-red-500/30" : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700"
+                        }`}
+                      title={tts.muted ? "Unmute speaker" : "Mute speaker"}
+                    >
+                      {tts.muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+                    </Button>
+                    <Button
+                      onClick={endCall}
+                      size="icon"
+                      className="h-10 w-10 rounded-full bg-red-600 text-white hover:bg-red-700 flex-shrink-0 shadow-lg shadow-red-600/20"
+                      title="End call"
+                    >
+                      <PhoneOff className="h-5 w-5" />
+                    </Button>
+                  </div>
+                </div>
               </div>
             ) : (
-                <div className="mb-3">
+                /* Text / Setup Mode: Dynamic two-row layout for a premium, spacious configuration */
+                <div className="flex flex-col gap-2.5">
                   {/* Pending image preview */}
                   {pendingImage && (
-                    <div className="relative inline-block mb-2 group">
+                    <div className="relative inline-block mb-1 group">
                       <img
                         src={pendingImage}
                         alt="Pending upload"
@@ -894,6 +946,8 @@ export default function App() {
                     </div>
                   )}
 
+                  {/* Row 1: Chat Input Box + Camera + Call Start */}
+                  <div className="flex items-center gap-2">
                   <form
                     onSubmit={(e) => {
                       e.preventDefault()
@@ -908,7 +962,7 @@ export default function App() {
                       setTextInput("")
                       setPendingImage(null)
                     }}
-                    className="flex items-center gap-2"
+                      className="flex-1 flex items-center bg-zinc-900/50 border border-zinc-700/30 rounded-xl px-2.5 py-1.5 gap-2"
                   >
                     {selectedOption.supportsVision && (
                       <div className="flex-shrink-0">
@@ -917,7 +971,7 @@ export default function App() {
                           accept="image/*"
                           ref={fileInputRef}
                           onChange={handleImageSelect}
-                          disabled={status !== "ready" || isCallActive}
+                            disabled={status !== "ready"}
                           className="hidden"
                         />
                         <Button
@@ -925,8 +979,8 @@ export default function App() {
                           size="icon"
                           variant="ghost"
                           onClick={() => fileInputRef.current?.click()}
-                          disabled={status !== "ready" || isCallActive}
-                          className="h-8 w-8 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 rounded-full"
+                            disabled={status !== "ready"}
+                            className="h-7 w-7 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-full"
                           title="Upload image (vision)"
                         >
                           <Camera className="h-4.5 w-4.5" />
@@ -946,177 +1000,133 @@ export default function App() {
                             : "How can I help?"
                       }
                       disabled={status !== "ready"}
-                      className="flex-1 bg-transparent text-zinc-200 text-sm px-2 py-1 outline-none placeholder:text-zinc-500 disabled:text-zinc-500"
+                        className="flex-1 bg-transparent text-zinc-200 text-sm outline-none placeholder:text-zinc-500 disabled:text-zinc-500"
                     />
-                  </form>
+                    </form>
+
+                    {/* Call Start button */}
+                    {status !== "loading" && status !== "idle" && (
+                      <Button
+                        onClick={startCall}
+                        size="icon"
+                        className="h-9 w-9 rounded-xl bg-green-600 text-white hover:bg-green-700 flex-shrink-0 shadow-lg shadow-green-600/20"
+                        title="Start call"
+                      >
+                        <Phone className="h-4.5 w-4.5" />
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Row 2: Selectors & Mute Controls (spacious & easy to tap on mobile) */}
+                  <div className="flex items-center justify-between border-t border-zinc-700/20 pt-1.5 mt-0.5">
+                    <div className="flex items-center gap-1">
+                      {/* LLM Dropdown */}
+                      <div className="relative" ref={llmMenuRef}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowLLMMenu(!showLLMMenu)}
+                          disabled={status === 'loading'}
+                          className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850 gap-1 px-2 h-8 text-[11px] font-medium"
+                        >
+                          <span className="uppercase">{selectedOption.name.replace(" 3.2", "").replace(" E2B", "")}</span>
+                          <ChevronDown className="h-3 w-3 opacity-60" />
+                        </Button>
+                        {showLLMMenu && (
+                          <div className="absolute bottom-full mb-2 left-0 bg-zinc-850 border border-zinc-700 rounded-lg shadow-xl p-2 min-w-[180px] z-20">
+                            {LLM_OPTIONS.map((opt) => (
+                              <button
+                                key={opt.id}
+                                onClick={() => {
+                                  void switchLLM(opt.id)
+                                  setShowLLMMenu(false)
+                                }}
+                                className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-zinc-700 ${selectedLLMId === opt.id ? 'bg-zinc-700 text-white' : 'text-zinc-300'
+                                  }`}
+                              >
+                                <div className="font-medium text-xs text-white">{opt.name}</div>
+                                <div className="text-[10px] text-zinc-500">{opt.sizeLabel}</div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Language Dropdown */}
+                      <div className="relative" ref={langMenuRef}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowLangMenu(!showLangMenu)}
+                          className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850 gap-1 px-2 h-8 text-[11px] font-medium"
+                        >
+                          <span className="uppercase">{tts.language}</span>
+                          <ChevronDown className="h-3 w-3 opacity-60" />
+                        </Button>
+                        {showLangMenu && (
+                          <div className="absolute bottom-full mb-2 left-0 bg-zinc-850 border border-zinc-700 rounded-lg shadow-xl p-2 min-w-[120px] z-20">
+                            {languages.map((lang) => (
+                              <button
+                                key={lang.id}
+                                onClick={() => {
+                                  tts.setLanguage(lang.id)
+                                  setShowLangMenu(false)
+                                }}
+                                className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-zinc-700 ${tts.language === lang.id ? "bg-zinc-700 text-white" : "text-zinc-300"
+                                  }`}
+                              >
+                                {lang.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Voice Dropdown */}
+                      <div className="relative" ref={voiceMenuRef}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowVoiceMenu(!showVoiceMenu)}
+                          className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850 gap-1 px-2 h-8 text-[11px] font-medium"
+                        >
+                          <span>{tts.voice}</span>
+                          <ChevronDown className="h-3 w-3 opacity-60" />
+                        </Button>
+                        {showVoiceMenu && (
+                          <div className="absolute bottom-full mb-2 left-0 bg-zinc-850 border border-zinc-700 rounded-lg shadow-xl p-2 min-w-[140px] z-20">
+                            {voices.map((voice) => (
+                              <button
+                                key={voice.id}
+                                onClick={() => {
+                                  void tts.setVoice(voice.id)
+                                  setShowVoiceMenu(false)
+                                }}
+                                className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-zinc-700 ${tts.voice === voice.id ? "bg-zinc-700 text-white" : "text-zinc-300"
+                                  }`}
+                              >
+                                <div className="font-medium">{voice.name}</div>
+                                <div className="text-xs text-zinc-500">{voice.desc}</div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Speaker Mute Control */}
+                  <Button
+                      onClick={() => tts.setMuted(!tts.muted)}
+                    size="icon"
+                    variant="ghost"
+                      className="h-8 w-8 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 flex-shrink-0"
+                      title={tts.muted ? "Unmute speaker" : "Mute speaker"}
+                  >
+                      {tts.muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                    </Button>
+                  </div>
                 </div>
             )}
-            
-            {/* Controls row */}
-            <div className="flex items-center gap-2">
-              {/* Waveform - takes remaining space */}
-              <div className="flex-1 min-w-0 h-8">
-                <LiveWaveform
-                  active={waveformActive}
-                  processing={waveformProcessing}
-                  barWidth={2}
-                  barGap={2}
-                  barRadius={1}
-                  fadeEdges={true}
-                  fadeWidth={24}
-                  sensitivity={2}
-                  smoothingTimeConstant={0.8}
-                  height={32}
-                  mode="static"
-                  className={waveformActive ? "text-green-400" : waveformProcessing ? "text-blue-400" : "text-zinc-600"}
-                />
-              </div>
-
-              {/* Buttons - flex-shrink-0 to prevent shrinking */}
-              <div className="flex items-center gap-1 flex-shrink-0">
-                {/* Mic mute - black/white icon */}
-                {status !== "loading" && status !== "idle" && (
-                  <Button
-                    onClick={toggleMicMute}
-                    size="icon"
-                    variant="ghost"
-                    disabled={!isCallActive}
-                    className={`h-10 w-10 rounded-full ${
-                      !isCallActive
-                        ? "text-zinc-600 cursor-not-allowed"
-                        : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700"
-                    }`}
-                    title={isMicMuted ? "Unmute mic" : "Mute mic"}
-                  >
-                    {isMicMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-                  </Button>
-                )}
-
-                {/* Speaker mute - black/white icon */}
-                <Button
-                  onClick={() => tts.setMuted(!tts.muted)}
-                  size="icon"
-                  variant="ghost"
-                  className="h-10 w-10 rounded-full text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700"
-                  title={tts.muted ? "Unmute speaker" : "Mute speaker"}
-                >
-                  {tts.muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-                </Button>
-
-                {/* LLM selector */}
-                <div className="relative" ref={llmMenuRef}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowLLMMenu(!showLLMMenu)}
-                    disabled={status === 'loading' || isCallActive}
-                    className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <span className="text-xs uppercase">{selectedOption.name}</span>
-                    <ChevronDown className="h-3 w-3" />
-                  </Button>
-                  {showLLMMenu && (
-                    <div className="absolute bottom-full mb-2 right-0 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl p-2 min-w-[180px] z-20">
-                      {LLM_OPTIONS.map((opt) => (
-                        <button
-                          key={opt.id}
-                          onClick={() => {
-                            void switchLLM(opt.id)
-                            setShowLLMMenu(false)
-                          }}
-                          className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-zinc-700 ${selectedLLMId === opt.id ? 'bg-zinc-700 text-white' : 'text-zinc-300'
-                            }`}
-                        >
-                          <div className="font-medium text-xs text-white">{opt.name}</div>
-                          <div className="text-[10px] text-zinc-500">{opt.sizeLabel}</div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Language selector */}
-                <div className="relative" ref={langMenuRef}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowLangMenu(!showLangMenu)}
-                    className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 gap-1"
-                  >
-                    <span className="text-xs uppercase">{tts.language}</span>
-                    <ChevronDown className="h-3 w-3" />
-                  </Button>
-                  {showLangMenu && (
-                    <div className="absolute bottom-full mb-2 right-0 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl p-2 min-w-[120px] z-20">
-                      {languages.map((lang) => (
-                        <button
-                          key={lang.id}
-                          onClick={() => {
-                            tts.setLanguage(lang.id)
-                            setShowLangMenu(false)
-                          }}
-                          className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-zinc-700 ${tts.language === lang.id ? "bg-zinc-700 text-white" : "text-zinc-300"
-                            }`}
-                        >
-                          {lang.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Voice selector */}
-                <div className="relative" ref={voiceMenuRef}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowVoiceMenu(!showVoiceMenu)}
-                    className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 gap-1"
-                  >
-                    <span className="text-xs">{tts.voice}</span>
-                    <ChevronDown className="h-3 w-3" />
-                  </Button>
-                  {showVoiceMenu && (
-                    <div className="absolute bottom-full mb-2 right-0 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl p-2 min-w-[140px] z-20">
-                      {voices.map((voice) => (
-                        <button
-                          key={voice.id}
-                          onClick={() => {
-                            void tts.setVoice(voice.id)
-                            setShowVoiceMenu(false)
-                          }}
-                          className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-zinc-700 ${tts.voice === voice.id ? "bg-zinc-700 text-white" : "text-zinc-300"
-                            }`}
-                        >
-                          <div className="font-medium">{voice.name}</div>
-                          <div className="text-xs text-zinc-500">{voice.desc}</div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-
-
-                {/* Call toggle - colored (green start / red end) - far right */}
-                {status !== "loading" && status !== "idle" && (
-                  <Button
-                    onClick={isCallActive ? endCall : startCall}
-                    size="icon"
-                    variant="ghost"
-                    className={`h-10 w-10 rounded-full ${
-                      isCallActive
-                        ? "bg-red-600 text-white hover:bg-red-700"
-                        : "bg-green-600 text-white hover:bg-green-700"
-                    }`}
-                    title={isCallActive ? "End call" : "Start call"}
-                  >
-                    {isCallActive ? <PhoneOff className="h-5 w-5" /> : <Phone className="h-5 w-5" />}
-                  </Button>
-                )}
-
-              </div>
-            </div>
           </div>
         </div>
       </div>
