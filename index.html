@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Real-time AI voice chat running on your device" />
+    <title>Voice Chat</title>
+    <script>
+      (function () {
+        const originalWarn = console.warn
+        const originalError = console.error
+        const suppress = (...args) =>
+          args.some(
+            (arg) =>
+              typeof arg === "string" &&
+              (arg.includes("onnxruntime") ||
+                arg.includes("VerifyEachNodeIsAssignedToAnEp") ||
+                arg.includes("session_state.cc") ||
+                arg.includes("[W:onnxruntime") ||
+                arg.includes("content-length") ||
+                arg.includes("Unknown model class")),
+          )
+        console.warn = function (...args) {
+          if (!suppress(...args)) originalWarn.apply(console, args)
+        }
+        console.error = function (...args) {
+          if (!suppress(...args)) originalError.apply(console, args)
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
