@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { LiveWaveform } from '@/components/ui/live-waveform'
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ui/conversation'
 import { Message, MessageContent } from '@/components/ui/message'
-import { Mic, MicOff, Volume2, VolumeX, Phone, PhoneOff, ChevronDown, Settings, X, Camera, RotateCcw } from 'lucide-react'
+import { Mic, MicOff, Volume2, VolumeX, Phone, PhoneOff, ChevronDown, Settings, X, Camera, RotateCcw, AlertTriangle, Info } from 'lucide-react'
 import { useTTS, type TTSVoice, type TTSLanguage } from '@/hooks/use-tts'
 import { useGemma4 } from '@/hooks/use-gemma4'
 import { useWebLLM } from '@/hooks/use-webllm'
@@ -95,6 +95,9 @@ export default function App() {
     ttsLoaded: false,
     llmLoaded: false,
   })
+  const [isSecure, setIsSecure] = useState(true)
+  const [isMobile, setIsMobile] = useState(false)
+  const [dismissedWarnings, setDismissedWarnings] = useState<string[]>([])
   
   const workerRef = useRef<Worker | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -639,6 +642,16 @@ export default function App() {
 
   // Check WebGPU support and conditionally auto-initialize on mount
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const secure = window.location.protocol === "https:" ||
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1"
+      setIsSecure(secure)
+
+      const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      setIsMobile(mobile)
+    }
+
     // Check WebGPU
     const checkWebGPU = async () => {
       if (typeof navigator !== "undefined" && "gpu" in navigator) {
@@ -699,6 +712,61 @@ export default function App() {
 
   return (
     <div className="h-screen bg-zinc-950 flex flex-col">
+      {/* Warning Banners */}
+      <div className="w-full max-w-2xl mx-auto px-4 pt-4 flex flex-col gap-2 z-30 empty:hidden">
+        {/* Insecure Context Alert */}
+        {!isSecure && !dismissedWarnings.includes('insecure') && (
+          <div className="flex items-start gap-3 bg-red-950/20 border border-red-500/30 rounded-xl p-3.5 shadow-md shadow-red-900/5">
+            <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="font-semibold text-red-200 text-xs">Secure Context (HTTPS) Required</h4>
+              <p className="text-[11px] text-red-300/80 leading-normal mt-0.5">
+                Microphone access is blocked on insecure connections. Please run/deploy this application over HTTPS or access it via localhost/127.0.0.1 for the voice feature to work.
+              </p>
+            </div>
+            <button onClick={() => setDismissedWarnings(p => [...p, 'insecure'])} className="text-red-400/60 hover:text-red-200 cursor-pointer">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
+        {/* WebGPU Missing Alert */}
+        {debugInfo.webgpu !== 'checking...' && debugInfo.webgpu !== 'available' && !dismissedWarnings.includes('webgpu') && (
+          <div className="flex items-start gap-3 bg-amber-950/20 border border-amber-500/30 rounded-xl p-3.5 shadow-md shadow-amber-900/5">
+            <AlertTriangle className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="font-semibold text-amber-200 text-xs">
+                {isIOS ? 'WebGPU Not Enabled (iOS Safari)' : 'WebGPU Not Supported'}
+              </h4>
+              <p className="text-[11px] text-amber-300/80 leading-normal mt-0.5">
+                {isIOS
+                  ? 'Local LLMs require WebGPU. To enable WebGPU on iOS, open iOS Settings > Safari > Advanced > Feature Flags (or Experimental Features) and turn on WebGPU.'
+                  : 'Your current browser does not support WebGPU, which is required to run local LLMs. Please switch to a compatible browser like Google Chrome, Microsoft Edge, or Opera.'}
+              </p>
+            </div>
+            <button onClick={() => setDismissedWarnings(p => [...p, 'webgpu'])} className="text-amber-400/60 hover:text-amber-200 cursor-pointer">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Mobile Memory Alert */}
+        {isMobile && (selectedOption.backend === 'gemma4' || (selectedOption.webllmId && (selectedOption.webllmId.includes('3B') || selectedOption.webllmId.includes('1.5B')))) && !dismissedWarnings.includes('memory') && (
+          <div className="flex items-start gap-3 bg-zinc-900/80 border border-zinc-700/50 rounded-xl p-3.5 shadow-md backdrop-blur-sm">
+            <Info className="h-5 w-5 text-purple-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="font-semibold text-zinc-200 text-xs">Mobile Device Memory Warning</h4>
+              <p className="text-[11px] text-zinc-400 leading-normal mt-0.5">
+                You have selected <strong>{selectedOption.name} ({selectedOption.sizeLabel})</strong>. Mobile browsers enforce strict tab memory limits (typically ~1.5GB). Large models may crash the page. We recommend using <strong>Qwen 0.5B</strong> or <strong>Llama 1B</strong>.
+              </p>
+            </div>
+            <button onClick={() => setDismissedWarnings(p => [...p, 'memory'])} className="text-zinc-500 hover:text-zinc-300 cursor-pointer">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+      </div>
+
       <Conversation className="flex-1 pb-32">
         <ConversationContent className={cn("max-w-2xl mx-auto", messages.length === 0 ? "min-h-full flex flex-col justify-center" : "pt-16")}>
           {messages.length === 0 ? (
@@ -714,6 +782,8 @@ export default function App() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[420px] overflow-y-auto pr-1">
                     {LLM_OPTIONS.map((opt) => {
                       const isRecommended = opt.id === DEFAULT_LLM_ID
+                      const sizeInGB = parseFloat(opt.sizeLabel.replace(/[~ GB]/g, ''))
+                      const isHeavyForMobile = isMobile && sizeInGB >= 1.5
                       return (
                         <button
                           key={opt.id}
@@ -737,6 +807,11 @@ export default function App() {
                                 {opt.supportsVision && (
                                   <span className="bg-green-500/10 text-green-400 text-[9px] font-medium px-1.5 py-0.5 rounded-full border border-green-500/20">
                                     Vision
+                                  </span>
+                                )}
+                                {isHeavyForMobile && (
+                                  <span className="bg-red-500/20 text-red-300 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-red-500/30">
+                                    May Crash Mobile
                                   </span>
                                 )}
                               </div>
@@ -1009,8 +1084,14 @@ export default function App() {
                       <Button
                         onClick={startCall}
                         size="icon"
-                        className="h-9 w-9 rounded-xl bg-green-600 text-white hover:bg-green-700 flex-shrink-0 shadow-lg shadow-green-600/20"
-                        title="Start call"
+                        disabled={!isSecure}
+                        className={cn(
+                          "h-9 w-9 rounded-xl flex-shrink-0 shadow-lg",
+                          isSecure
+                            ? "bg-green-600 text-white hover:bg-green-700 shadow-green-600/20"
+                            : "bg-zinc-850 text-zinc-600 cursor-not-allowed opacity-50 shadow-none"
+                        )}
+                        title={isSecure ? "Start call" : "Microphone access requires HTTPS"}
                       >
                         <Phone className="h-4.5 w-4.5" />
                       </Button>
@@ -1034,20 +1115,31 @@ export default function App() {
                         </Button>
                         {showLLMMenu && (
                           <div className="absolute bottom-full mb-2 left-0 bg-zinc-850 border border-zinc-700 rounded-lg shadow-xl p-2 min-w-[180px] z-20">
-                            {LLM_OPTIONS.map((opt) => (
-                              <button
-                                key={opt.id}
-                                onClick={() => {
-                                  void switchLLM(opt.id)
-                                  setShowLLMMenu(false)
-                                }}
-                                className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-zinc-700 ${selectedLLMId === opt.id ? 'bg-zinc-700 text-white' : 'text-zinc-300'
-                                  }`}
-                              >
-                                <div className="font-medium text-xs text-white">{opt.name}</div>
-                                <div className="text-[10px] text-zinc-500">{opt.sizeLabel}</div>
-                              </button>
-                            ))}
+                            {LLM_OPTIONS.map((opt) => {
+                              const sizeInGB = parseFloat(opt.sizeLabel.replace(/[~ GB]/g, ''))
+                              const isHeavyForMobile = isMobile && sizeInGB >= 1.5
+                              return (
+                                <button
+                                  key={opt.id}
+                                  onClick={() => {
+                                    void switchLLM(opt.id)
+                                    setShowLLMMenu(false)
+                                  }}
+                                  className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-zinc-700 ${selectedLLMId === opt.id ? 'bg-zinc-700 text-white' : 'text-zinc-300'
+                                    }`}
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="font-medium text-xs text-white">{opt.name}</div>
+                                    {isHeavyForMobile && (
+                                      <span className="bg-red-500/20 text-red-300 text-[8px] font-bold px-1 rounded border border-red-500/20 flex-shrink-0">
+                                        Heavy
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[10px] text-zinc-500">{opt.sizeLabel}</div>
+                                </button>
+                              )
+                            })}
                           </div>
                         )}
                       </div>

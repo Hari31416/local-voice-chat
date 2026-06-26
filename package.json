@@ -1,6 +1,6 @@
 {
   "name": "local-voice-chat",
-  "version": "0.2.0",
+  "version": "0.1.0",
   "private": false,
   "type": "module",
   "description": "WebVoice: 100% locally running in-browser voice assistant with local STT, LLM, and TTS",
