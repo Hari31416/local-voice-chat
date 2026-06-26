@@ -1,23 +1,22 @@
-import { useState, useRef, useCallback, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { LiveWaveform } from "@/components/ui/live-waveform"
-import { Conversation, ConversationContent, ConversationScrollButton } from "@/components/ui/conversation"
-import { Message, MessageContent } from "@/components/ui/message"
-import { Mic, MicOff, Volume2, VolumeX, Phone, PhoneOff, ChevronDown, Settings, X } from "lucide-react"
-import { useTTS, type TTSVoice, type TTSLanguage } from "@/hooks/use-tts"
-import { useGemma4 } from "@/hooks/use-gemma4"
-import { useWebLLM } from "@/hooks/use-webllm"
-import { detectLanguage } from "@/lib/supertonic3/engine"
+import { useState, useRef, useCallback, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { LiveWaveform } from '@/components/ui/live-waveform'
+import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ui/conversation'
+import { Message, MessageContent } from '@/components/ui/message'
+import { Mic, MicOff, Volume2, VolumeX, Phone, PhoneOff, ChevronDown, Settings, X, Camera } from 'lucide-react'
+import { useTTS, type TTSVoice, type TTSLanguage } from '@/hooks/use-tts'
+import { useGemma4 } from '@/hooks/use-gemma4'
+import { useWebLLM } from '@/hooks/use-webllm'
+import { detectLanguage } from '@/lib/supertonic3/engine'
+import { LLM_OPTIONS } from '@/lib/llm-models'
+import { resizeImage, cn } from '@/lib/utils'
 
-type Status = "idle" | "loading" | "ready" | "listening" | "recording" | "transcribing" | "thinking" | "speaking" | "error"
-type LLMMode = "gemma4" | "webllm" | "webllm-small"
+type Status = 'idle' | 'loading' | 'ready' | 'listening' | 'recording' | 'transcribing' | 'thinking' | 'speaking' | 'error'
 
 // Detect iOS/iPadOS
-const isIOS = typeof navigator !== "undefined" && /iPad|iPhone|iPod/.test(navigator.userAgent)
+const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent)
 
-const SMALL_MODEL = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC"
-const LARGE_MODEL = "Qwen2.5-1.5B-Instruct-q4f16_1-MLC"
-const DEFAULT_LLM_MODE: LLMMode = isIOS ? "webllm-small" : "gemma4"
+const DEFAULT_LLM_ID = isIOS ? 'qwen-0.5b' : 'gemma4'
 
 const BASE_SYSTEM_PROMPT = `You are a warm, helpful voice assistant in a hands-free chat.
 
@@ -54,26 +53,43 @@ function buildSystemPrompt(lastUserMessage: string): string {
  */
 
 interface ChatMessage {
-  role: "user" | "assistant"
+  role: 'user' | 'assistant'
   content: string
+  image?: string
 }
 
 export default function App() {
-  const [status, setStatus] = useState<Status>("idle")
-  const [statusMessage, setStatusMessage] = useState("Click 'Initialize' to load models")
+  const [status, setStatus] = useState<Status>('idle')
+  const [statusMessage, setStatusMessage] = useState('Click \'Initialize\' to load models')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isCallActive, setIsCallActive] = useState(false)
   const [isMicMuted, setIsMicMuted] = useState(false)
   const [showVoiceMenu, setShowVoiceMenu] = useState(false)
   const [showLangMenu, setShowLangMenu] = useState(false)
-  const [textInput, setTextInput] = useState("")
-  const [llmMode, setLLMMode] = useState<LLMMode>(DEFAULT_LLM_MODE)
+  const [showLLMMenu, setShowLLMMenu] = useState(false)
+  const [textInput, setTextInput] = useState('')
+  const [selectedLLMId, setSelectedLLMId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('voice_agent_selected_model')
+      if (saved && LLM_OPTIONS.some(o => o.id === saved)) {
+        return saved
+      }
+    }
+    return DEFAULT_LLM_ID
+  })
+  const [hasUserSelected, setHasUserSelected] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('voice_agent_selected_model') !== null
+    }
+    return false
+  })
+  const [pendingImage, setPendingImage] = useState<string | null>(null)
   const [showDebugPanel, setShowDebugPanel] = useState(false)
   const [sttLoadProgress, setSttLoadProgress] = useState(0)
   const [debugInfo, setDebugInfo] = useState({
-    webgpu: "checking...",
-    sttBackend: "unknown",
-    llmMode: DEFAULT_LLM_MODE,
+    webgpu: 'checking...',
+    sttBackend: 'unknown',
+    llmMode: DEFAULT_LLM_ID,
     vadLoaded: false,
     sttLoaded: false,
     ttsLoaded: false,
@@ -135,24 +151,27 @@ export default function App() {
   // Keep refs in sync for use in callbacks
   const gemma4Ref = useRef(gemma4)
   const webllmRef = useRef(webllm)
-  const llmModeRef = useRef(llmMode)
+  const selectedLLMIdRef = useRef(selectedLLMId)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
   useEffect(() => {
     gemma4Ref.current = gemma4
     webllmRef.current = webllm
-    llmModeRef.current = llmMode
-  }, [gemma4, webllm, llmMode])
+    selectedLLMIdRef.current = selectedLLMId
+  }, [gemma4, webllm, selectedLLMId])
 
-  const llmLoadProgress = llmMode === "gemma4" ? gemma4.loadProgress : webllm.loadProgress
+  const selectedOption = LLM_OPTIONS.find(o => o.id === selectedLLMId) || LLM_OPTIONS[0]
+  const llmLoadProgress = selectedOption.backend === 'gemma4' ? gemma4.loadProgress : webllm.loadProgress
 
   const activeLoadProgress = !debugInfo.sttLoaded
-    ? { label: "STT", progress: sttLoadProgress, color: "bg-green-500" }
+    ? { label: 'STT', progress: sttLoadProgress, color: 'bg-green-500' }
     : !debugInfo.ttsLoaded
-      ? { label: "TTS", progress: tts.loadProgress, color: "bg-blue-500" }
+      ? { label: 'TTS', progress: tts.loadProgress, color: 'bg-blue-500' }
       : !debugInfo.llmLoaded
         ? {
-            label: `LLM (${llmMode === "gemma4" ? "Gemma 4" : "Qwen"})`,
+          label: `LLM (${selectedOption.name})`,
             progress: llmLoadProgress,
-            color: "bg-purple-500",
+          color: 'bg-purple-500',
           }
         : null
 
@@ -193,35 +212,34 @@ export default function App() {
             await tts.loadModels()
             setDebugInfo(prev => ({ ...prev, ttsLoaded: true }))
             
-            // Load LLM — Gemma 4 by default, WebLLM as fallback
-            const mode = llmModeRef.current
+            // Load LLM based on selected registry option
+            const selectedId = selectedLLMIdRef.current
+            const option = LLM_OPTIONS.find(o => o.id === selectedId) || LLM_OPTIONS[0]
             let llmReady = false
 
             try {
-              if (mode === "gemma4") {
-                setStatusMessage("Loading Gemma 4 E2B LLM (~3.2GB)...")
+              if (option.backend === 'gemma4') {
+                setStatusMessage('Loading Gemma 4 E2B LLM (~3.2GB)...')
                 llmReady = await gemma4Ref.current.loadModel()
               } else {
-                const modelToLoad = mode === "webllm-small" ? SMALL_MODEL : LARGE_MODEL
-                setStatusMessage(`Loading Qwen LLM (${mode === "webllm-small" ? "0.5B" : "1.5B"})...`)
-                await webllmRef.current.loadModel(modelToLoad as Parameters<typeof webllm.loadModel>[0])
-                llmReady = webllmRef.current.isReady
+                setStatusMessage(`Loading ${option.name} LLM (${option.sizeLabel})...`)
+                llmReady = await webllmRef.current.loadModel(option.webllmId as any)
               }
             } catch (error) {
-              console.error("[Voice] LLM load error:", error)
+              console.error('[Voice] LLM load error:', error)
             }
 
             if (!llmReady) {
-              setStatus("error")
+              setStatus('error')
               setStatusMessage(
-                mode === "gemma4"
-                  ? "Gemma 4 failed to load. Try Qwen via the debug panel (gear icon), or check WebGPU / available memory."
-                  : "LLM failed to load. Check the browser console for details.",
+                option.backend === 'gemma4'
+                  ? 'Gemma 4 failed to load. Try Qwen via the dropdown selector, or check WebGPU / available memory.'
+                  : 'LLM failed to load. Check the browser console for details.',
               )
               break
             }
 
-            setDebugInfo(prev => ({ ...prev, llmLoaded: true, llmMode: mode }))
+            setDebugInfo(prev => ({ ...prev, llmLoaded: true, llmMode: selectedId }))
             
             setStatus("ready")
             setStatusMessage("Ready! Click 'Start Call' to begin.")
@@ -251,7 +269,9 @@ export default function App() {
             if (isProcessingRef.current) {
               console.debug("[Voice] Interrupting - new user input")
               abortControllerRef.current?.abort()
-              if (llmModeRef.current === "gemma4") {
+
+              const currentOption = LLM_OPTIONS.find(o => o.id === selectedLLMIdRef.current) || LLM_OPTIONS[0]
+              if (currentOption.backend === 'gemma4') {
                 gemma4Ref.current.abort()
               } else {
                 webllmRef.current.abort()
@@ -263,7 +283,7 @@ export default function App() {
               return
             }
             
-            const userMessage: ChatMessage = { role: "user", content: text.trim() }
+            const userMessage: ChatMessage = { role: 'user', content: text.trim() }
             setMessages(prev => [...prev, userMessage])
             handleLLMResponse([...messagesRef.current, userMessage])
           }
@@ -294,6 +314,88 @@ export default function App() {
     workerRef.current?.postMessage({ type: "init" })
   }, [initWorker])
 
+  const selectAndInitialize = useCallback((modelId: string) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('voice_agent_selected_model', modelId)
+    }
+    setSelectedLLMId(modelId)
+    selectedLLMIdRef.current = modelId
+    setHasUserSelected(true)
+    loadModels()
+  }, [loadModels])
+
+  const switchLLM = useCallback(async (newModelId: string) => {
+    if (newModelId === selectedLLMIdRef.current) return
+
+    setSelectedLLMId(newModelId)
+    selectedLLMIdRef.current = newModelId
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('voice_agent_selected_model', newModelId)
+    }
+    setHasUserSelected(true)
+
+    if (!debugInfo.llmLoaded && status !== 'ready' && status !== 'error') {
+      return
+    }
+
+    setStatus('loading')
+    setDebugInfo(prev => ({ ...prev, llmLoaded: false, llmMode: newModelId }))
+
+    const oldOption = LLM_OPTIONS.find(o => o.id === selectedLLMId)
+    const newOption = LLM_OPTIONS.find(o => o.id === newModelId)
+
+    if (oldOption && newOption) {
+      if (oldOption.backend === 'gemma4' && newOption.backend === 'webllm') {
+        await gemma4Ref.current.unload()
+      } else if (oldOption.backend === 'webllm' && newOption.backend === 'gemma4') {
+        await webllmRef.current.unload()
+      } else if (oldOption.backend === 'webllm' && newOption.backend === 'webllm' && oldOption.webllmId !== newOption.webllmId) {
+        await webllmRef.current.unload()
+      }
+    }
+
+    try {
+      let llmReady = false
+      if (newOption?.backend === 'gemma4') {
+        setStatusMessage('Loading Gemma 4 E2B LLM (~3.2GB)...')
+        llmReady = await gemma4Ref.current.loadModel()
+      } else if (newOption) {
+        setStatusMessage(`Loading ${newOption.name} LLM (${newOption.sizeLabel})...`)
+        llmReady = await webllmRef.current.loadModel(newOption.webllmId as any)
+      }
+
+      if (!llmReady) {
+        setStatus('error')
+        setStatusMessage('LLM failed to load. Check browser console or try another model.')
+        return
+      }
+
+      setDebugInfo(prev => ({ ...prev, llmLoaded: true }))
+      setStatus('ready')
+      setStatusMessage('Ready! Click \'Start Call\' to begin.')
+    } catch (err) {
+      console.error('[Voice] Switch LLM error:', err)
+      setStatus('error')
+      setStatusMessage(`LLM failed to load: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }, [selectedLLMId, status, debugInfo.llmLoaded])
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    try {
+      const resized = await resizeImage(file)
+      setPendingImage(resized)
+    } catch (err) {
+      console.error('Failed to process image:', err)
+    } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
   // Handle LLM response with interruption support
   const handleLLMResponse = async (conversationHistory: ChatMessage[]) => {
     // Prevent parallel LLM/TTS calls
@@ -318,20 +420,25 @@ export default function App() {
       const systemPrompt = buildSystemPrompt(lastUserText)
 
       let assistantMessage: string
+      const option = LLM_OPTIONS.find(o => o.id === selectedLLMIdRef.current) || LLM_OPTIONS[0]
 
-      if (llmModeRef.current === "gemma4") {
+      if (option.backend === "gemma4") {
         const currentGemma4 = gemma4Ref.current
         if (!currentGemma4.isReady) {
-          throw new Error("Gemma 4 is not loaded — reload the page or switch to Qwen in the debug panel")
+          throw new Error("Gemma 4 is not loaded — reload the page or switch model in the dropdown")
         }
         console.debug(`[Voice] Using Gemma 4 E2B, history: ${recentHistory.length}/${conversationHistory.length}`)
-        assistantMessage = await currentGemma4.chat(chatMessages, systemPrompt)
+
+        const lastUserMsg = [...recentHistory].reverse().find(m => m.role === "user")
+        const lastUserImage = lastUserMsg?.image
+
+        assistantMessage = await currentGemma4.chat(chatMessages, systemPrompt, lastUserImage)
       } else {
         const currentWebllm = webllmRef.current
         if (!currentWebllm.isReady) {
           throw new Error("LLM not ready")
         }
-        console.debug(`[Voice] Using WebLLM (${llmModeRef.current}), history: ${recentHistory.length}/${conversationHistory.length}`)
+        console.debug(`[Voice] Using WebLLM (${option.name}), history: ${recentHistory.length}/${conversationHistory.length}`)
         assistantMessage = await currentWebllm.chat(chatMessages, systemPrompt)
       }
 
@@ -468,7 +575,8 @@ export default function App() {
   // End call
   const endCall = () => {
     abortControllerRef.current?.abort()
-    if (llmModeRef.current === "gemma4") {
+    const option = LLM_OPTIONS.find(o => o.id === selectedLLMIdRef.current) || LLM_OPTIONS[0]
+    if (option.backend === 'gemma4') {
       gemma4Ref.current.abort()
     } else {
       webllmRef.current.abort()
@@ -483,7 +591,7 @@ export default function App() {
     setStatusMessage("Ready! Click mic to start a new call.")
   }
 
-  // Check WebGPU support and auto-initialize on mount
+  // Check WebGPU support and conditionally auto-initialize on mount
   useEffect(() => {
     // Check WebGPU
     const checkWebGPU = async () => {
@@ -500,8 +608,13 @@ export default function App() {
     }
     checkWebGPU()
     
-    console.debug("[Voice] Auto-initializing...")
-    loadModels()
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('voice_agent_selected_model') : null
+    if (saved) {
+      console.log("[Voice] Auto-initializing with saved model:", saved)
+      loadModels()
+    } else {
+      console.log("[Voice] Waiting for model selection...")
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -510,6 +623,7 @@ export default function App() {
     return () => {
       stopListening()
       workerRef.current?.terminate()
+      workerRef.current = null
     }
   }, [])
 
@@ -543,45 +657,114 @@ export default function App() {
       <Conversation className="flex-1 pb-32">
         <ConversationContent className="max-w-2xl mx-auto">
           {messages.length === 0 ? (
-            <div className="text-center py-20">
-              <h1 className="text-2xl font-semibold text-white mb-2">AI Voice Chat</h1>
-              <p className="text-zinc-400 text-sm mb-4">100% in-browser — nothing leaves your device</p>
-              <p className="text-zinc-500">
-                {status === "idle" 
-                  ? "Click Initialize to load the voice models"
-                  : status === "loading"
-                  ? statusMessage
-                  : isCallActive 
-                  ? "Start speaking..." 
-                  : "Click the phone to start a call"}
-              </p>
-              {status === "loading" && activeLoadProgress && (
-                <div className="mt-4 w-64 mx-auto">
-                  <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
-                    {activeLoadProgress.progress > 0 ? (
-                      <div
-                        className={`h-full ${activeLoadProgress.color} transition-all duration-300`}
-                        style={{ width: `${activeLoadProgress.progress}%` }}
-                      />
-                    ) : (
-                      <div className={`h-full ${activeLoadProgress.color} w-1/3 animate-pulse`} />
-                    )}
+            <div className="text-center py-10 max-w-xl mx-auto">
+              <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-red-500">AI Voice Chat</h1>
+              <p className="text-zinc-400 text-sm mb-8">100% in-browser LLM, VAD, STT, and TTS — nothing leaves your device</p>
+
+              {status === 'idle' && !hasUserSelected ? (
+                <div className="text-left space-y-4">
+                  <div className="text-zinc-300 text-sm font-semibold mb-2 text-center">
+                    Choose a model to initialize the voice agent:
                   </div>
-                  <p className="text-xs text-zinc-600 mt-1">
-                    {activeLoadProgress.label}:{" "}
-                    {activeLoadProgress.progress > 0
-                      ? `${Math.round(activeLoadProgress.progress)}%`
-                      : "starting..."}
-                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[420px] overflow-y-auto pr-1">
+                    {LLM_OPTIONS.map((opt) => {
+                      const isRecommended = opt.id === DEFAULT_LLM_ID
+                      return (
+                        <button
+                          key={opt.id}
+                          onClick={() => selectAndInitialize(opt.id)}
+                          className={cn(
+                            'flex flex-col justify-between p-3 rounded-xl border text-left transition-all duration-200 hover:scale-[1.01]',
+                            isRecommended
+                              ? 'bg-purple-950/20 border-purple-500/50 hover:bg-purple-950/30 shadow-md shadow-purple-500/5 sm:col-span-2'
+                              : 'bg-zinc-900/50 border-zinc-800 hover:bg-zinc-900 hover:border-zinc-700'
+                          )}
+                        >
+                          <div className="w-full">
+                            <div className="flex items-center justify-between gap-2 mb-1.5">
+                              <span className="font-semibold text-white text-sm">{opt.name}</span>
+                              <div className="flex items-center gap-1">
+                                {isRecommended && (
+                                  <span className="bg-purple-500/20 text-purple-300 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-purple-500/30">
+                                    Rec
+                                  </span>
+                                )}
+                                {opt.supportsVision && (
+                                  <span className="bg-green-500/10 text-green-400 text-[9px] font-medium px-1.5 py-0.5 rounded-full border border-green-500/20">
+                                    Vision
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <p className="text-[11px] text-zinc-400 leading-normal line-clamp-1 mb-2">
+                              {opt.backend === 'gemma4'
+                                ? 'Multimodal WebGPU model with vision capabilities.'
+                                : 'Browser optimized text-only WebLLM model.'}
+                            </p>
+                          </div>
+                          <div className="flex items-center justify-between w-full pt-1.5 border-t border-zinc-800/50 mt-auto">
+                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{opt.backend}</span>
+                            <span className="text-[11px] font-bold text-zinc-300">{opt.sizeLabel}</span>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
+              ) : (
+                <>
+                  <p className="text-zinc-500">
+                      {status === 'idle'
+                        ? 'Click Initialize to load the voice models'
+                        : status === 'loading'
+                          ? statusMessage
+                          : isCallActive 
+                            ? 'Start speaking...'
+                            : 'Click the phone to start a call'}
+                    </p>
+                    {status === 'loading' && activeLoadProgress && (
+                      <div className="mt-4 w-64 mx-auto">
+                        <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                          {activeLoadProgress.progress > 0 ? (
+                            <div
+                              className={`h-full ${activeLoadProgress.color} transition-all duration-300`}
+                              style={{ width: `${activeLoadProgress.progress}%` }}
+                            />
+                          ) : (
+                            <div className={`h-full ${activeLoadProgress.color} w-1/3 animate-pulse`} />
+                          )}
+                        </div>
+                        <p className="text-xs text-zinc-600 mt-1">
+                          {activeLoadProgress.label}:{' '}
+                          {activeLoadProgress.progress > 0
+                            ? `${Math.round(activeLoadProgress.progress)}%`
+                            : 'starting...'}
+                        </p>
+                      </div>
+                    )}
+                  </>
               )}
             </div>
           ) : (
             messages.map((msg, i) => (
-              <Message key={i} from={msg.role === "user" ? "user" : "assistant"}>
-                <MessageContent variant="contained">
-                  {msg.content}
-                </MessageContent>
+              <Message key={i} from={msg.role === 'user' ? 'user' : 'assistant'}>
+                <div className={cn(
+                  'flex flex-col gap-1.5 max-w-[80%]',
+                  msg.role === 'user' ? 'items-end' : 'items-start'
+                )}>
+                  {msg.image && (
+                    <img
+                      src={msg.image}
+                      alt="Uploaded visual context"
+                      className="max-h-48 rounded-lg object-contain border border-zinc-800 shadow-md"
+                    />
+                  )}
+                  {msg.content && (
+                    <MessageContent variant="contained" className="max-w-none">
+                      {msg.content}
+                    </MessageContent>
+                  )}
+                </div>
               </Message>
             ))
           )}
@@ -601,33 +784,12 @@ export default function App() {
           <div className="space-y-1 text-zinc-300">
             <div>WebGPU: <span className={debugInfo.webgpu === "available" ? "text-green-400" : "text-yellow-400"}>{debugInfo.webgpu}</span></div>
             <div>iOS: <span className={isIOS ? "text-yellow-400" : "text-green-400"}>{isIOS ? "yes" : "no"}</span></div>
-            <div>LLM Mode: <span className="text-blue-400">{llmMode}</span></div>
+            <div>LLM ID: <span className="text-blue-400">{selectedLLMId}</span></div>
             <hr className="border-zinc-700 my-2" />
             <div>VAD: {debugInfo.vadLoaded ? <span className="text-green-400">✓</span> : <span className="text-zinc-500">○</span>}</div>
             <div>STT: {debugInfo.sttLoaded ? <span className="text-green-400">✓</span> : <span className="text-zinc-500">○</span>}</div>
             <div>TTS: {debugInfo.ttsLoaded ? <span className="text-green-400">✓</span> : <span className="text-zinc-500">○</span>} {tts.backend && <span className="text-zinc-500">({tts.backend})</span>}</div>
             <div>LLM: {debugInfo.llmLoaded ? <span className="text-green-400">✓</span> : <span className="text-zinc-500">○</span>}</div>
-            <hr className="border-zinc-700 my-2" />
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setLLMMode("gemma4")}
-                className={`px-2 py-1 rounded ${llmMode === "gemma4" ? "bg-purple-600" : "bg-zinc-700"}`}
-              >
-                Gemma 4
-              </button>
-              <button
-                onClick={() => setLLMMode("webllm")}
-                className={`px-2 py-1 rounded ${llmMode === "webllm" ? "bg-blue-600" : "bg-zinc-700"}`}
-              >
-                Qwen 1.5B
-              </button>
-              <button
-                onClick={() => setLLMMode("webllm-small")}
-                className={`px-2 py-1 rounded ${llmMode === "webllm-small" ? "bg-blue-600" : "bg-zinc-700"}`}
-              >
-                Qwen 0.5B
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -651,32 +813,81 @@ export default function App() {
                 {status === "listening" ? "Listening..." : status === "recording" ? "Recording..." : status === "thinking" ? "Thinking..." : status === "speaking" ? "Speaking..." : "..."}
               </div>
             ) : (
-              <form 
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  if (!textInput.trim() || status !== "ready") return
-                  const userMessage: ChatMessage = { role: "user", content: textInput.trim() }
-                  setMessages(prev => [...prev, userMessage])
-                  handleLLMResponse([...messagesRef.current, userMessage])
-                  setTextInput("")
-                }}
-                className="mb-3"
-              >
-                <input
-                  type="text"
-                  value={textInput}
-                  onChange={(e) => setTextInput(e.target.value)}
-                  placeholder={
-                    status === "idle"
-                      ? "Initialize to start..."
-                      : status === "loading" || status === "error"
-                        ? statusMessage
-                        : "How can I help?"
-                  }
-                  disabled={status !== "ready"}
-                  className="w-full bg-transparent text-zinc-200 text-sm px-2 py-1 outline-none placeholder:text-zinc-500 disabled:text-zinc-500"
-                />
-              </form>
+                <div className="mb-3">
+                  {/* Pending image preview */}
+                  {pendingImage && (
+                    <div className="relative inline-block mb-2 group">
+                      <img
+                        src={pendingImage}
+                        alt="Pending upload"
+                        className="h-16 w-16 object-cover rounded-lg border border-zinc-700 shadow-md"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setPendingImage(null)}
+                        className="absolute -top-1.5 -right-1.5 bg-red-600 text-white rounded-full p-0.5 hover:bg-red-700 shadow"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
+
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      if ((!textInput.trim() && !pendingImage) || status !== "ready") return
+                      const userMessage: ChatMessage = {
+                        role: "user",
+                        content: textInput.trim(),
+                        image: pendingImage || undefined
+                      }
+                      setMessages(prev => [...prev, userMessage])
+                      handleLLMResponse([...messagesRef.current, userMessage])
+                      setTextInput("")
+                      setPendingImage(null)
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    {selectedOption.supportsVision && (
+                      <div className="flex-shrink-0">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          ref={fileInputRef}
+                          onChange={handleImageSelect}
+                          disabled={status !== "ready" || isCallActive}
+                          className="hidden"
+                        />
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={status !== "ready" || isCallActive}
+                          className="h-8 w-8 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 rounded-full"
+                          title="Upload image (vision)"
+                        >
+                          <Camera className="h-4.5 w-4.5" />
+                        </Button>
+                      </div>
+                    )}
+
+                    <input
+                      type="text"
+                      value={textInput}
+                      onChange={(e) => setTextInput(e.target.value)}
+                      placeholder={
+                        status === "idle"
+                          ? "Initialize to start..."
+                          : status === "loading" || status === "error"
+                            ? statusMessage
+                            : "How can I help?"
+                      }
+                      disabled={status !== "ready"}
+                      className="flex-1 bg-transparent text-zinc-200 text-sm px-2 py-1 outline-none placeholder:text-zinc-500 disabled:text-zinc-500"
+                    />
+                  </form>
+                </div>
             )}
             
             {/* Controls row */}
@@ -729,6 +940,41 @@ export default function App() {
                 >
                   {tts.muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
                 </Button>
+
+                {/* LLM selector */}
+                <div className="relative">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowLLMMenu(!showLLMMenu)}
+                    disabled={status === 'loading' || isCallActive}
+                    className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span className="text-xs uppercase">{selectedOption.name}</span>
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                  {showLLMMenu && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setShowLLMMenu(false)} />
+                      <div className="absolute bottom-full mb-2 right-0 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl p-2 min-w-[180px] z-20">
+                        {LLM_OPTIONS.map((opt) => (
+                          <button
+                            key={opt.id}
+                            onClick={() => {
+                              void switchLLM(opt.id)
+                              setShowLLMMenu(false)
+                            }}
+                            className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-zinc-700 ${selectedLLMId === opt.id ? 'bg-zinc-700 text-white' : 'text-zinc-300'
+                              }`}
+                          >
+                            <div className="font-medium text-xs text-white">{opt.name}</div>
+                            <div className="text-[10px] text-zinc-500">{opt.sizeLabel}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
 
                 {/* Language selector */}
                 <div className="relative">

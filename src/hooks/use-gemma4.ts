@@ -10,8 +10,8 @@ interface UseGemma4Options {
 }
 
 interface ChatMessage {
-  role: "user" | "assistant" | "system"
-  content: string
+  role: 'user' | 'assistant' | 'system'
+  content: string | ({ type: 'text'; text: string } | { type: 'image' })[]
 }
 
 type TensorLike = { dims: number[]; slice: (...args: unknown[]) => unknown }
@@ -25,7 +25,7 @@ type Gemma4Processor = {
     tokens: unknown,
     options: { skip_special_tokens: boolean },
   ) => string[]
-  (text: string, images?: null, audio?: null, options?: { add_special_tokens?: boolean }): Promise<Record<string, unknown>>
+  (text: string, images?: any, audio?: null, options?: { add_special_tokens?: boolean }): Promise<Record<string, unknown>>
 }
 
 type Gemma4Model = {
@@ -136,29 +136,59 @@ export function useGemma4(options: UseGemma4Options = {}) {
   )
 
   const chat = useCallback(
-    async (messages: ChatMessage[], systemPrompt?: string): Promise<string> => {
+    async (messages: ChatMessage[], systemPrompt?: string, imageDataUrl?: string): Promise<string> => {
       const processor = processorRef.current
       const model = modelRef.current
 
       if (!processor || !model) {
-        throw new Error("Gemma 4 not loaded")
+        throw new Error('Gemma 4 not loaded')
       }
 
-      updateStatus("generating")
+      updateStatus('generating')
       abortRef.current = false
 
       try {
-        const chatMessages = systemPrompt
-          ? [{ role: "system" as const, content: systemPrompt }, ...messages]
-          : messages
+        let lastUserIndex = -1
+        for (let i = messages.length - 1; i >= 0; --i) {
+          if (messages[i].role === 'user') {
+            lastUserIndex = i
+            break
+          }
+        }
 
-        const prompt = processor.apply_chat_template(chatMessages, {
+        const formattedMessages = messages.map((m, index) => {
+          const isLastUser = index === lastUserIndex
+          if (isLastUser && imageDataUrl) {
+            return {
+              role: m.role,
+              content: [
+                { type: 'image' as const },
+                { type: 'text' as const, text: m.content as string }
+              ]
+            }
+          }
+          return {
+            role: m.role,
+            content: m.content
+          }
+        })
+
+        const chatMessages = systemPrompt
+          ? [{ role: 'system' as const, content: systemPrompt }, ...formattedMessages]
+          : formattedMessages
+
+        const prompt = processor.apply_chat_template(chatMessages as any, {
           enable_thinking: false,
           add_generation_prompt: true,
           tokenize: false,
         })
 
-        const inputs = await processor(prompt, null, null, { add_special_tokens: false })
+        const { RawImage } = await import('@huggingface/transformers')
+        const image = imageDataUrl
+          ? await RawImage.fromURL(imageDataUrl)
+          : null
+
+        const inputs = await processor(prompt, image, null, { add_special_tokens: false })
         const inputIds = inputs.input_ids as TensorLike
         const promptLength = inputIds.dims.at(-1) ?? 0
 

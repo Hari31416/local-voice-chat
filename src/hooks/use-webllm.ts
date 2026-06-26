@@ -43,10 +43,10 @@ export function useWebLLM(options: UseWebLLMOptions = {}) {
   }, [onStatusChange])
 
   // Load model
-  const loadModel = useCallback(async (modelId: WebLLMModel = "Qwen2.5-1.5B-Instruct-q4f16_1-MLC") => {
-    if (status === "loading") return
+  const loadModel = useCallback(async (modelId: WebLLMModel = 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC'): Promise<boolean> => {
+    if (status === 'loading') return false
     
-    updateStatus("loading")
+    updateStatus('loading')
     setLoadProgress(0)
 
     try {
@@ -56,7 +56,7 @@ export function useWebLLM(options: UseWebLLMOptions = {}) {
           const pct = Math.round((progress.progress || 0) * 100)
           setLoadProgress(pct)
           // Only log major milestones
-          if (pct === 100 || (progress.text && progress.text.includes("Finish"))) {
+          if (pct === 100 || (progress.text && progress.text.includes('Finish'))) {
             console.debug(`[WebLLM] ${progress.text}`)
           }
         },
@@ -64,12 +64,14 @@ export function useWebLLM(options: UseWebLLMOptions = {}) {
 
       engineRef.current = engine
       setCurrentModel(modelId)
-      updateStatus("ready")
+      updateStatus('ready')
       console.log(`[WebLLM] Model ${modelId} loaded successfully`)
+      return true
     } catch (error) {
-      console.error("[WebLLM] Load error:", error)
-      updateStatus("error")
+      console.error('[WebLLM] Load error:', error)
+      updateStatus('error')
       onError?.(error instanceof Error ? error : new Error(String(error)))
+      return false
     }
   }, [status, updateStatus, onError])
 
