@@ -153,6 +153,52 @@ export default function App() {
   const webllmRef = useRef(webllm)
   const selectedLLMIdRef = useRef(selectedLLMId)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const voiceMenuRef = useRef<HTMLDivElement | null>(null)
+  const langMenuRef = useRef<HTMLDivElement | null>(null)
+  const llmMenuRef = useRef<HTMLDivElement | null>(null)
+  const debugPanelRef = useRef<HTMLDivElement | null>(null)
+  const debugToggleRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (showVoiceMenu && voiceMenuRef.current && !voiceMenuRef.current.contains(target)) {
+        setShowVoiceMenu(false)
+      }
+      if (showLangMenu && langMenuRef.current && !langMenuRef.current.contains(target)) {
+        setShowLangMenu(false)
+      }
+      if (showLLMMenu && llmMenuRef.current && !llmMenuRef.current.contains(target)) {
+        setShowLLMMenu(false)
+      }
+      if (
+        showDebugPanel &&
+        debugPanelRef.current &&
+        !debugPanelRef.current.contains(target) &&
+        debugToggleRef.current &&
+        !debugToggleRef.current.contains(target)
+      ) {
+        setShowDebugPanel(false)
+      }
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowVoiceMenu(false)
+        setShowLangMenu(false)
+        setShowLLMMenu(false)
+        setShowDebugPanel(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [showVoiceMenu, showLangMenu, showLLMMenu, showDebugPanel])
 
   useEffect(() => {
     gemma4Ref.current = gemma4
@@ -774,7 +820,7 @@ export default function App() {
 
       {/* Debug Panel */}
       {showDebugPanel && (
-        <div className="fixed top-4 right-4 bg-zinc-900 border border-zinc-700 rounded-lg p-4 text-xs font-mono z-50 min-w-[200px]">
+        <div ref={debugPanelRef} className="fixed top-4 right-4 bg-zinc-900 border border-zinc-700 rounded-lg p-4 text-xs font-mono z-50 min-w-[200px]">
           <div className="flex justify-between items-center mb-2">
             <span className="text-zinc-400 font-semibold">Debug Info</span>
             <button onClick={() => setShowDebugPanel(false)} className="text-zinc-500 hover:text-white">
@@ -810,6 +856,7 @@ export default function App() {
           </button>
         )}
         <button
+          ref={debugToggleRef}
           onClick={() => setShowDebugPanel(!showDebugPanel)}
           className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-400 hover:text-white transition-colors"
           title="Toggle debug panel"
@@ -957,7 +1004,7 @@ export default function App() {
                 </Button>
 
                 {/* LLM selector */}
-                <div className="relative">
+                <div className="relative" ref={llmMenuRef}>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -969,30 +1016,27 @@ export default function App() {
                     <ChevronDown className="h-3 w-3" />
                   </Button>
                   {showLLMMenu && (
-                    <>
-                      <div className="fixed inset-0 z-10" onClick={() => setShowLLMMenu(false)} />
-                      <div className="absolute bottom-full mb-2 right-0 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl p-2 min-w-[180px] z-20">
-                        {LLM_OPTIONS.map((opt) => (
-                          <button
-                            key={opt.id}
-                            onClick={() => {
-                              void switchLLM(opt.id)
-                              setShowLLMMenu(false)
-                            }}
-                            className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-zinc-700 ${selectedLLMId === opt.id ? 'bg-zinc-700 text-white' : 'text-zinc-300'
-                              }`}
-                          >
-                            <div className="font-medium text-xs text-white">{opt.name}</div>
-                            <div className="text-[10px] text-zinc-500">{opt.sizeLabel}</div>
-                          </button>
-                        ))}
-                      </div>
-                    </>
+                    <div className="absolute bottom-full mb-2 right-0 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl p-2 min-w-[180px] z-20">
+                      {LLM_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.id}
+                          onClick={() => {
+                            void switchLLM(opt.id)
+                            setShowLLMMenu(false)
+                          }}
+                          className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-zinc-700 ${selectedLLMId === opt.id ? 'bg-zinc-700 text-white' : 'text-zinc-300'
+                            }`}
+                        >
+                          <div className="font-medium text-xs text-white">{opt.name}</div>
+                          <div className="text-[10px] text-zinc-500">{opt.sizeLabel}</div>
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
 
                 {/* Language selector */}
-                <div className="relative">
+                <div className="relative" ref={langMenuRef}>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1003,30 +1047,26 @@ export default function App() {
                     <ChevronDown className="h-3 w-3" />
                   </Button>
                   {showLangMenu && (
-                    <>
-                      <div className="fixed inset-0 z-10" onClick={() => setShowLangMenu(false)} />
-                      <div className="absolute bottom-full mb-2 right-0 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl p-2 min-w-[120px] z-20">
-                        {languages.map((lang) => (
-                          <button
-                            key={lang.id}
-                            onClick={() => {
-                              tts.setLanguage(lang.id)
-                              setShowLangMenu(false)
-                            }}
-                            className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-zinc-700 ${
-                              tts.language === lang.id ? "bg-zinc-700 text-white" : "text-zinc-300"
+                    <div className="absolute bottom-full mb-2 right-0 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl p-2 min-w-[120px] z-20">
+                      {languages.map((lang) => (
+                        <button
+                          key={lang.id}
+                          onClick={() => {
+                            tts.setLanguage(lang.id)
+                            setShowLangMenu(false)
+                          }}
+                          className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-zinc-700 ${tts.language === lang.id ? "bg-zinc-700 text-white" : "text-zinc-300"
                             }`}
-                          >
-                            {lang.label}
-                          </button>
-                        ))}
-                      </div>
-                    </>
+                        >
+                          {lang.label}
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
 
                 {/* Voice selector */}
-                <div className="relative">
+                <div className="relative" ref={voiceMenuRef}>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1037,27 +1077,22 @@ export default function App() {
                     <ChevronDown className="h-3 w-3" />
                   </Button>
                   {showVoiceMenu && (
-                    <>
-                      {/* Click outside to close */}
-                      <div className="fixed inset-0 z-10" onClick={() => setShowVoiceMenu(false)} />
-                      <div className="absolute bottom-full mb-2 right-0 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl p-2 min-w-[140px] z-20">
-                        {voices.map((voice) => (
-                          <button
-                            key={voice.id}
-                            onClick={() => {
-                              void tts.setVoice(voice.id)
-                              setShowVoiceMenu(false)
-                            }}
-                            className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-zinc-700 ${
-                              tts.voice === voice.id ? "bg-zinc-700 text-white" : "text-zinc-300"
+                    <div className="absolute bottom-full mb-2 right-0 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl p-2 min-w-[140px] z-20">
+                      {voices.map((voice) => (
+                        <button
+                          key={voice.id}
+                          onClick={() => {
+                            void tts.setVoice(voice.id)
+                            setShowVoiceMenu(false)
+                          }}
+                          className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-zinc-700 ${tts.voice === voice.id ? "bg-zinc-700 text-white" : "text-zinc-300"
                             }`}
-                          >
-                            <div className="font-medium">{voice.name}</div>
-                            <div className="text-xs text-zinc-500">{voice.desc}</div>
-                          </button>
-                        ))}
-                      </div>
-                    </>
+                        >
+                          <div className="font-medium">{voice.name}</div>
+                          <div className="text-xs text-zinc-500">{voice.desc}</div>
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
 
