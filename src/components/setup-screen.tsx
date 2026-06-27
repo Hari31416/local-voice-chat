@@ -20,6 +20,8 @@ const SUPERTRONIC_LANGUAGES: { id: TTSLanguage; label: string }[] = [
 
 export interface SetupSelection {
   llmId: string
+  sttEnabled: boolean
+  ttsEnabled: boolean
   ttsEngine: TTSEngine
   ttsVoice: string
   ttsLanguage: TTSLanguage
@@ -49,6 +51,8 @@ export function SetupScreen({
   onReset,
 }: SetupScreenProps) {
   const [llmId, setLlmId] = useStateSelection(initial.llmId)
+  const [sttEnabled, setSttEnabled] = useStateSelection(initial.sttEnabled)
+  const [ttsEnabled, setTtsEnabled] = useStateSelection(initial.ttsEnabled)
   const [ttsEngine, setTtsEngine] = useStateSelection<TTSEngine>(initial.ttsEngine)
   const [ttsVoice, setTtsVoice] = useStateSelection(initial.ttsVoice)
   const [ttsLanguage, setTtsLanguage] = useStateSelection<TTSLanguage>(initial.ttsLanguage)
@@ -64,10 +68,11 @@ export function SetupScreen({
   }
 
   const estimatedDownload = (() => {
-    const stt = "~150 MB"
+    const stt = sttEnabled ? "~150 MB" : null
     const llm = selectedLlm.sizeLabel
-    const tts =
-      ttsEngine === "supertonic"
+    const tts = !ttsEnabled
+      ? null
+      : ttsEngine === "supertonic"
         ? "~400 MB"
         : "sizeLabel" in selectedVoice
           ? selectedVoice.sizeLabel
@@ -142,8 +147,56 @@ export function SetupScreen({
           </div>
         </section>
 
-        {/* Right Column: TTS Configuration & Launch */}
+        {/* Right Column: Voice I/O & Launch */}
         <div className="sm:col-span-5 space-y-4">
+          <section className="space-y-2">
+            <h2 className="text-zinc-300 text-xs font-semibold uppercase tracking-wider">Voice input & output</h2>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => setSttEnabled(!sttEnabled)}
+                className={cn(
+                  'p-2.5 rounded-lg border text-left transition-all duration-150 cursor-pointer',
+                  sttEnabled
+                    ? 'bg-zinc-800/80 border-zinc-500 ring-1 ring-zinc-500/25'
+                    : 'bg-zinc-900/40 border-zinc-800 hover:bg-zinc-900/80 hover:border-zinc-700 opacity-70',
+                )}
+              >
+                <div className="font-semibold text-white text-xs">Speech recognition</div>
+                <p className="text-[10px] text-zinc-500 mt-0.5">
+                  {sttEnabled ? 'On · ~150 MB' : 'Skipped · text input only'}
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTtsEnabled(!ttsEnabled)}
+                className={cn(
+                  'p-2.5 rounded-lg border text-left transition-all duration-150 cursor-pointer',
+                  ttsEnabled
+                    ? 'bg-zinc-800/80 border-zinc-500 ring-1 ring-zinc-500/25'
+                    : 'bg-zinc-900/40 border-zinc-800 hover:bg-zinc-900/80 hover:border-zinc-700 opacity-70',
+                )}
+              >
+                <div className="font-semibold text-white text-xs">Text-to-speech</div>
+                <p className="text-[10px] text-zinc-500 mt-0.5">
+                  {ttsEnabled ? 'On · spoken replies' : 'Skipped · text replies only'}
+                </p>
+              </button>
+            </div>
+            {sttEnabled && !ttsEnabled && (
+              <p className="text-[10px] text-zinc-500">
+                Mic button will be used for voice input without call mode.
+              </p>
+            )}
+            {sttEnabled && ttsEnabled && (
+              <p className="text-[10px] text-zinc-500">
+                Full call mode with continuous voice conversation.
+              </p>
+            )}
+          </section>
+
+          {ttsEnabled && (
+            <>
           <section className="space-y-2">
             <h2 className="text-zinc-300 text-xs font-semibold uppercase tracking-wider">Text-to-speech engine</h2>
             <div className="grid grid-cols-2 gap-1 bg-zinc-950 p-0.5 rounded-lg border border-zinc-850">
@@ -204,17 +257,23 @@ export function SetupScreen({
               </select>
             </div>
           </div>
+            </>
+          )}
 
           <div className="bg-zinc-900/60 border border-zinc-850 rounded-lg p-2.5 text-[10px] text-zinc-400 space-y-1">
             <div className="font-semibold text-zinc-300 text-xs mb-1.5">Estimated download</div>
+            {estimatedDownload.stt && (
             <div className="flex justify-between">
               <span>Speech recognition</span>
               <span className="text-zinc-300 font-medium">{estimatedDownload.stt}</span>
             </div>
+            )}
+            {estimatedDownload.tts && (
             <div className="flex justify-between">
               <span>TTS ({selectedTtsEngine.name})</span>
               <span className="text-zinc-300 font-medium">{estimatedDownload.tts}</span>
             </div>
+            )}
             <div className="flex justify-between">
               <span>LLM ({selectedLlm.name})</span>
               <span className="text-zinc-300 font-medium">{estimatedDownload.llm}</span>
@@ -227,6 +286,8 @@ export function SetupScreen({
               onClick={() =>
                 onStart({
                   llmId,
+                  sttEnabled,
+                  ttsEnabled,
                   ttsEngine,
                   ttsVoice,
                   ttsLanguage: ttsEngine === 'supertonic' ? ttsLanguage : 'auto',

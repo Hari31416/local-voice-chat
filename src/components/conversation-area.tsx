@@ -58,6 +58,8 @@ export function ConversationArea({
               <SetupScreen
                 initial={{
                   llmId: prefs.llmId,
+                  sttEnabled: prefs.sttEnabled,
+                  ttsEnabled: prefs.ttsEnabled,
                   ttsEngine: prefs.ttsEngine,
                   ttsVoice: prefs.ttsVoice,
                   ttsLanguage: prefs.ttsLanguage,
@@ -77,7 +79,11 @@ export function ConversationArea({
                     ? statusMessage
                     : isCallActive
                       ? 'Start speaking...'
-                      : 'Click the phone to start a call'}
+                      : prefs.sttEnabled && prefs.ttsEnabled
+                        ? 'Click the phone to start a call'
+                        : prefs.sttEnabled
+                          ? 'Click the mic to speak, or type a message'
+                          : 'Type a message to begin'}
                 </p>
                 {setupPhase === "loading" && activeLoadProgress && (
                   <div className="mt-4 w-64 mx-auto">
@@ -107,7 +113,10 @@ export function ConversationArea({
         ) : (
             messages.map((msg, i) => {
               const isLatestAssistant = msg.role === "assistant" && i === messages.length - 1
-              const isSpeakingThis = isLatestAssistant && (agentStatus === "speaking" || agentStatus === "synthesizing")
+              const isSpeakingThis =
+                prefs.ttsEnabled &&
+                isLatestAssistant &&
+                (agentStatus === "speaking" || agentStatus === "synthesizing")
 
               return (
                 <Message key={i} from={msg.role === "user" ? "user" : "assistant"}>
@@ -132,8 +141,10 @@ export function ConversationArea({
                         (msg.audioUrl || isSpeakingThis) && "min-w-[280px] xs:min-w-[320px] sm:min-w-[380px]"
                       )}
                     >
-                      <MessageText className="leading-relaxed">{msg.content}</MessageText>
-                      {(msg.audioUrl || isSpeakingThis) && (
+                      <MessageText markdown={msg.role === "assistant"} className="leading-relaxed">
+                        {msg.content}
+                      </MessageText>
+                      {(prefs.ttsEnabled && (msg.audioUrl || isSpeakingThis)) && (
                         <AudioWaveformPlayer
                           src={msg.audioUrl ?? ""}
                           variant="chat"

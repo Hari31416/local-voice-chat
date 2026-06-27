@@ -78,7 +78,8 @@ export function useWebLLM(options: UseWebLLMOptions = {}) {
   // Generate chat completion
   const chat = useCallback(async (
     messages: ChatMessage[],
-    systemPrompt?: string
+    systemPrompt?: string,
+    options?: { maxTokens?: number },
   ): Promise<string> => {
     if (!engineRef.current) {
       throw new Error("WebLLM not loaded")
@@ -95,7 +96,7 @@ export function useWebLLM(options: UseWebLLMOptions = {}) {
 
       const response = await engineRef.current.chat.completions.create({
         messages: allMessages,
-        max_tokens: 256,
+        max_tokens: options?.maxTokens ?? 256,
         temperature: 0.7,
       })
 
@@ -119,7 +120,8 @@ export function useWebLLM(options: UseWebLLMOptions = {}) {
   // Stream chat completion
   const chatStream = useCallback(async function* (
     messages: ChatMessage[],
-    systemPrompt?: string
+    systemPrompt?: string,
+    options?: { maxTokens?: number },
   ): AsyncGenerator<string, void, unknown> {
     if (!engineRef.current) {
       throw new Error("WebLLM not loaded")
@@ -134,7 +136,7 @@ export function useWebLLM(options: UseWebLLMOptions = {}) {
 
       const chunks = await engineRef.current.chat.completions.create({
         messages: allMessages,
-        max_tokens: 256,
+        max_tokens: options?.maxTokens ?? 256,
         temperature: 0.7,
         stream: true,
       })

@@ -105,6 +105,7 @@ export function useTTS(options: UseTTSOptions) {
 
     if (!gainNodeRef.current) {
       gainNodeRef.current = ctx.createGain()
+      gainNodeRef.current.gain.value = muted ? 0 : 1
       gainNodeRef.current.connect(ctx.destination)
     }
 
@@ -115,7 +116,26 @@ export function useTTS(options: UseTTSOptions) {
     }
 
     return ctx
-  }, [])
+  }, [muted])
+
+  /** Call synchronously from a user gesture before async TTS playback. */
+  const preparePlayback = useCallback(() => {
+    stoppedRef.current = false
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext()
+    }
+    if (!gainNodeRef.current) {
+      gainNodeRef.current = audioContextRef.current.createGain()
+      gainNodeRef.current.gain.value = muted ? 0 : 1
+      gainNodeRef.current.connect(audioContextRef.current.destination)
+    }
+    if (!analyserRef.current) {
+      analyserRef.current = audioContextRef.current.createAnalyser()
+      analyserRef.current.fftSize = 256
+      analyserRef.current.connect(gainNodeRef.current)
+    }
+    void audioContextRef.current.resume()
+  }, [muted])
 
   const playNextInQueue = useCallback(async () => {
     if (stoppedRef.current) {
@@ -327,6 +347,7 @@ export function useTTS(options: UseTTSOptions) {
     analyser: analyserRef.current,
     stop,
     reset,
+    preparePlayback,
     muted,
     setMuted,
     isReady: status === "ready",

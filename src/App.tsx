@@ -16,8 +16,12 @@ export default function App() {
 
   const handleTabChange = (tab: "voice" | "tts" | "stt") => {
     setActiveTab(tab)
-    if (tab !== "voice" && agent.isCallActive) {
-      agent.endCall()
+    if (tab !== "voice" && (agent.isCallActive || agent.isMicActive)) {
+      if (agent.isCallActive) {
+        agent.endCall()
+      } else {
+        void agent.toggleMic()
+      }
     }
   }
 
@@ -114,6 +118,9 @@ export default function App() {
               setupPhase={agent.setupPhase}
               status={agent.status}
               isCallActive={agent.isCallActive}
+              isMicActive={agent.isMicActive}
+              hasCallMode={agent.hasCallMode}
+              hasMicInput={agent.hasMicInput}
               isMicMuted={agent.isMicMuted}
               isSecure={agent.isSecure}
               isMobile={agent.isMobile}
@@ -133,6 +140,7 @@ export default function App() {
               onSubmitText={agent.submitTextMessage}
               onStartCall={() => void agent.startCall()}
               onEndCall={agent.endCall}
+              onToggleMic={() => void agent.toggleMic()}
               onToggleMicMute={agent.toggleMicMute}
               onSwitchLLM={agent.switchLLM}
             />

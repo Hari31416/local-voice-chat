@@ -177,7 +177,12 @@ export function useGemma4(options: UseGemma4Options = {}) {
   )
 
   const chat = useCallback(
-    async (messages: ChatMessage[], systemPrompt?: string, imageDataUrl?: string): Promise<string> => {
+    async (
+      messages: ChatMessage[],
+      systemPrompt?: string,
+      imageDataUrl?: string,
+      options?: { maxTokens?: number },
+    ): Promise<string> => {
       const processor = processorRef.current
       const model = modelRef.current
 
@@ -215,7 +220,7 @@ export function useGemma4(options: UseGemma4Options = {}) {
 
         const outputs = await model.generate({
           ...inputs,
-          max_new_tokens: 128,
+          max_new_tokens: options?.maxTokens ?? 128,
           do_sample: false,
         })
 
@@ -254,6 +259,7 @@ export function useGemma4(options: UseGemma4Options = {}) {
     messages: ChatMessage[],
     systemPrompt?: string,
     imageDataUrl?: string,
+    options?: { maxTokens?: number },
   ): AsyncGenerator<string, void, unknown> {
     const processor = processorRef.current
     const model = modelRef.current
@@ -313,7 +319,7 @@ export function useGemma4(options: UseGemma4Options = {}) {
       const generatePromise = model
         .generate({
           ...inputs,
-          max_new_tokens: 128,
+          max_new_tokens: options?.maxTokens ?? 128,
           do_sample: false,
           streamer,
         })

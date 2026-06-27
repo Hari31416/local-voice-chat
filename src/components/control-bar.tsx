@@ -30,6 +30,9 @@ interface ControlBarProps {
   setupPhase: SetupPhase
   status: VoiceAgentStatus
   isCallActive: boolean
+  isMicActive: boolean
+  hasCallMode: boolean
+  hasMicInput: boolean
   isMicMuted: boolean
   isSecure: boolean
   isMobile: boolean
@@ -49,6 +52,7 @@ interface ControlBarProps {
   onSubmitText: () => void
   onStartCall: () => void
   onEndCall: () => void
+  onToggleMic: () => void
   onToggleMicMute: () => void
   onSwitchLLM: (modelId: string) => void
 }
@@ -57,6 +61,9 @@ export function ControlBar({
   setupPhase,
   status,
   isCallActive,
+  isMicActive,
+  hasCallMode,
+  hasMicInput,
   isMicMuted,
   isSecure,
   isMobile,
@@ -76,6 +83,7 @@ export function ControlBar({
   onSubmitText,
   onStartCall,
   onEndCall,
+  onToggleMic,
   onToggleMicMute,
   onSwitchLLM,
 }: ControlBarProps) {
@@ -286,7 +294,7 @@ export function ControlBar({
                   </Button>
                 </form>
 
-                {setupPhase === "ready" && status !== "loading" && (
+                {setupPhase === "ready" && status !== "loading" && hasCallMode && (
                   <Button
                     onClick={onStartCall}
                     size="icon"
@@ -300,6 +308,31 @@ export function ControlBar({
                     title={isSecure ? "Start call" : "Microphone access requires HTTPS"}
                   >
                     <Phone className="h-4.5 w-4.5" />
+                  </Button>
+                )}
+
+                {setupPhase === "ready" && status !== "loading" && hasMicInput && (
+                  <Button
+                    onClick={onToggleMic}
+                    size="icon"
+                    disabled={!isSecure}
+                    className={cn(
+                      "h-9 w-9 rounded-xl flex-shrink-0 shadow-lg",
+                      !isSecure
+                        ? "bg-zinc-850 text-zinc-600 cursor-not-allowed opacity-50 shadow-none"
+                        : isMicActive
+                          ? "bg-red-600 text-white hover:bg-red-700 shadow-red-600/20"
+                          : "bg-violet-600 text-white hover:bg-violet-500 shadow-violet-600/20",
+                    )}
+                    title={
+                      !isSecure
+                        ? "Microphone access requires HTTPS"
+                        : isMicActive
+                          ? "Stop listening"
+                          : "Start listening"
+                    }
+                  >
+                    {isMicActive ? <MicOff className="h-4.5 w-4.5" /> : <Mic className="h-4.5 w-4.5" />}
                   </Button>
                 )}
               </div>
@@ -354,7 +387,7 @@ export function ControlBar({
                     )}
                   </div>
 
-                  {prefs.ttsEngine === "supertonic" && (
+                  {prefs.ttsEnabled && prefs.ttsEngine === "supertonic" && (
                     <div className="relative" ref={langMenuRef}>
                       <Button
                         variant="ghost"
@@ -389,6 +422,7 @@ export function ControlBar({
                     </div>
                   )}
 
+                  {prefs.ttsEnabled && (
                   <div className="relative" ref={voiceMenuRef}>
                     <Button
                       variant="ghost"
@@ -422,8 +456,10 @@ export function ControlBar({
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
 
+                {prefs.ttsEnabled && (
                 <Button
                   onClick={() => tts.setMuted(!tts.muted)}
                   size="icon"
@@ -437,6 +473,7 @@ export function ControlBar({
                     <Volume2 className="h-4 w-4" />
                   )}
                 </Button>
+                )}
               </div>
             </div>
           )}

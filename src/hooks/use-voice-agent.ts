@@ -4,7 +4,7 @@ import { useTTS } from "@/hooks/use-tts"
 import { useGemma4 } from "@/hooks/use-gemma4"
 import { useWebLLM } from "@/hooks/use-webllm"
 import { DEFAULT_LLM_ID, LLM_OPTIONS } from "@/lib/llm-models"
-import { buildSystemPrompt } from "@/lib/system-prompt"
+import { buildSystemPrompt, getMaxTokens } from "@/lib/system-prompt"
 import { IS_IOS } from "@/lib/voice-agent-constants"
 import {
   type ChatMessage,
@@ -42,6 +42,19 @@ function pcmChunksToObjectUrl(chunks: Float32Array[], samplingRate: number): str
   return URL.createObjectURL(new Blob([wavBytes], { type: "audio/wav" }))
 }
 
+function getReadyMessage(prefs: UserPreferences): string {
+  if (prefs.sttEnabled && prefs.ttsEnabled) {
+    return "Ready! Click 'Start Call' to begin."
+  }
+  if (prefs.sttEnabled) {
+    return "Ready! Click the mic to speak, or type a message."
+  }
+  if (prefs.ttsEnabled) {
+    return "Ready! Type a message to get a spoken reply."
+  }
+  return "Ready! Type a message to begin."
+}
+
 export function useVoiceAgent() {
   const [status, setStatus] = useState<VoiceAgentStatus>("idle")
   const [statusMessage, setStatusMessage] = useState("Choose your models to begin")
@@ -49,6 +62,7 @@ export function useVoiceAgent() {
   const [prefs, setPrefs] = useState<UserPreferences>(() => loadPreferences())
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isCallActive, setIsCallActive] = useState(false)
+  const [isMicActive, setIsMicActive] = useState(false)
   const [isMicMuted, setIsMicMuted] = useState(false)
   const [textInput, setTextInput] = useState("")
   const [selectedLLMId, setSelectedLLMId] = useState<string>(
@@ -67,6 +81,7 @@ export function useVoiceAgent() {
   const workletNodeRef = useRef<AudioWorkletNode | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const isCallActiveRef = useRef(false)
+  const isMicActiveRef = useRef(false)
   const messagesRef = useRef<ChatMessage[]>([])
   const isProcessingRef = useRef(false)
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -84,12 +99,12 @@ export function useVoiceAgent() {
         setStatus("speaking")
         setStatusMessage("Speaking...")
       } else if (ttsStatus === "ready") {
-        if (isCallActiveRef.current) {
+        if (isCallActiveRef.current || isMicActiveRef.current) {
           setStatus("listening")
           setStatusMessage("Listening...")
         } else {
           setStatus("ready")
-          setStatusMessage("Ready!")
+          setStatusMessage(getReadyMessage(prefsRef.current))
         }
       }
     },
@@ -143,9 +158,10 @@ export function useVoiceAgent() {
   const llmLoadProgress =
     selectedOption.backend === "gemma4" ? gemma4.loadProgress : webllm.loadProgress
 
-  const activeLoadProgress: LoadProgress | null = !debugInfo.sttLoaded
+  const activeLoadProgress: LoadProgress | null =
+    prefs.sttEnabled && !debugInfo.sttLoaded
     ? { label: "STT", progress: sttLoadProgress, color: "bg-green-500" }
-    : !debugInfo.ttsLoaded
+    : prefs.ttsEnabled && !debugInfo.ttsLoaded
       ? { label: "TTS", progress: tts.loadProgress, color: "bg-blue-500" }
       : !debugInfo.llmLoaded
         ? {
@@ -158,6 +174,10 @@ export function useVoiceAgent() {
   useEffect(() => {
     isCallActiveRef.current = isCallActive
   }, [isCallActive])
+
+  useEffect(() => {
+    isMicActiveRef.current = isMicActive
+  }, [isMicActive])
 
   useEffect(() => {
     messagesRef.current = messages
@@ -204,11 +224,41 @@ export function useVoiceAgent() {
         const chatMessages = recentHistory.map((m) => ({ role: m.role, content: m.content }))
         const lastUserText =
           [...recentHistory].reverse().find((m) => m.role === 'user')?.content ?? ''
-        const systemPrompt = buildSystemPrompt(lastUserText)
-
-        let assistantMessage = ''
         const option =
           LLM_OPTIONS.find((o) => o.id === selectedLLMIdRef.current) || LLM_OPTIONS[0]
+        const ttsEnabled = prefsRef.current.ttsEnabled
+        const systemPrompt = buildSystemPrompt(lastUserText, ttsEnabled)
+        const maxTokens = getMaxTokens(
+          option.backend === "gemma4" ? "gemma4" : "webllm",
+          ttsEnabled,
+        )
+
+        let assistantMessage = ''
+
+        const updateAssistantMessage = (content: string) => {
+          setMessages((prev) => {
+            const copy = [...prev]
+            if (copy.length > 0 && copy[copy.length - 1].role === 'assistant') {
+              copy[copy.length - 1] = { ...copy[copy.length - 1], content }
+            }
+            return copy
+          })
+        }
+
+        const streamLLMTextOnly = async (
+          llmStream: AsyncGenerator<string, void, unknown>,
+        ) => {
+          for await (const delta of llmStream) {
+            assistantMessage += delta
+            updateAssistantMessage(assistantMessage)
+          }
+
+          if (!assistantMessage.trim()) {
+            throw new Error('LLM returned an empty response')
+          }
+
+          console.log('[LLM]', assistantMessage)
+        }
 
         const streamLLMWithSentenceTTS = async (
           llmStream: AsyncGenerator<string, void, unknown>,
@@ -216,16 +266,6 @@ export function useVoiceAgent() {
           const splitter = new TextSplitterStream()
           const pcmChunks: Float32Array[] = []
           let samplingRate = 22050
-
-          const updateAssistantMessage = (content: string) => {
-            setMessages((prev) => {
-              const copy = [...prev]
-              if (copy.length > 0 && copy[copy.length - 1].role === 'assistant') {
-                copy[copy.length - 1] = { ...copy[copy.length - 1], content }
-              }
-              return copy
-            })
-          }
 
           const synthOptions = { forQueue: true, live: true } as const
 
@@ -293,6 +333,8 @@ export function useVoiceAgent() {
           console.log('[LLM]', assistantMessage)
         }
 
+        const runLLMStream = ttsEnabled ? streamLLMWithSentenceTTS : streamLLMTextOnly
+
         if (option.backend === 'gemma4') {
           const currentGemma4 = gemma4Ref.current
           if (!currentGemma4.isReady) {
@@ -307,8 +349,8 @@ export function useVoiceAgent() {
           const lastUserMsg = [...recentHistory].reverse().find((m) => m.role === 'user')
           const lastUserImage = lastUserMsg?.image
 
-          await streamLLMWithSentenceTTS(
-            currentGemma4.chatStream(chatMessages, systemPrompt, lastUserImage),
+          await runLLMStream(
+            currentGemma4.chatStream(chatMessages, systemPrompt, lastUserImage, { maxTokens }),
           )
         } else {
           const currentWebllm = webllmRef.current
@@ -319,9 +361,17 @@ export function useVoiceAgent() {
             `[Voice] Using WebLLM (${option.name}), history: ${recentHistory.length}/${conversationHistory.length}`
           )
 
-          await streamLLMWithSentenceTTS(
-            currentWebllm.chatStream(chatMessages, systemPrompt),
+          await runLLMStream(
+            currentWebllm.chatStream(chatMessages, systemPrompt, { maxTokens }),
           )
+        }
+
+        if (isCallActiveRef.current || isMicActiveRef.current) {
+          setStatus("listening")
+          setStatusMessage("Listening...")
+        } else if (!prefsRef.current.ttsEnabled) {
+          setStatus("ready")
+          setStatusMessage(getReadyMessage(prefsRef.current))
         }
       } catch (error) {
         setMessages((prev) => {
@@ -339,7 +389,7 @@ export function useVoiceAgent() {
           setStatus('error')
           setStatusMessage(error instanceof Error ? error.message : `LLM error: ${error}`)
         }
-        if (isCallActiveRef.current) {
+        if (isCallActiveRef.current || isMicActiveRef.current) {
           setStatus("listening")
           setStatusMessage("Listening...")
         } else {
@@ -363,6 +413,63 @@ export function useVoiceAgent() {
     },
     [tts],
   )
+
+  const loadLlm = useCallback(async (): Promise<boolean> => {
+    const selectedId = selectedLLMIdRef.current
+    const option = LLM_OPTIONS.find((o) => o.id === selectedId) || LLM_OPTIONS[0]
+    let llmReady = false
+
+    try {
+      if (option.backend === "gemma4") {
+        setStatusMessage("Loading Gemma 4 E2B LLM (~3.2GB)...")
+        llmReady = await gemma4Ref.current.loadModel()
+      } else {
+        setStatusMessage(`Loading ${option.name} LLM (${option.sizeLabel})...`)
+        llmReady = await webllmRef.current.loadModel(option.webllmId as never)
+      }
+    } catch (error) {
+      console.error("[Voice] LLM load error:", error)
+    }
+
+    if (!llmReady) {
+      setStatus("error")
+      setStatusMessage(
+        option.backend === "gemma4"
+          ? "Gemma 4 failed to load. Try Qwen via the dropdown selector, or check WebGPU / available memory."
+          : "LLM failed to load. Check the browser console for details.",
+      )
+      return false
+    }
+
+    setDebugInfo((prev) => ({ ...prev, llmLoaded: true, llmMode: selectedId }))
+    return true
+  }, [])
+
+  const loadTtsThenLlm = useCallback(async (): Promise<void> => {
+    const ttsPrefs = prefsRef.current
+    if (ttsPrefs.ttsEnabled) {
+      const ttsEngineLabel =
+        TTS_ENGINE_OPTIONS.find((o) => o.id === ttsPrefs.ttsEngine)?.name ?? "TTS"
+      const ttsSize =
+        ttsPrefs.ttsEngine === "supertonic"
+          ? "~400MB"
+          : (PIPER_VOICES.find((v) => v.id === ttsPrefs.ttsVoice)?.sizeLabel ?? "~60MB")
+      setStatusMessage(`Loading ${ttsEngineLabel} TTS (${ttsSize})...`)
+      await tts.loadModels({
+        engine: ttsPrefs.ttsEngine,
+        voice: ttsPrefs.ttsVoice,
+      })
+      setDebugInfo((prev) => ({ ...prev, ttsLoaded: true }))
+    }
+
+    const llmReady = await loadLlm()
+    if (!llmReady) return
+
+    setSetupPhase("ready")
+    setStatus("ready")
+    setStatusMessage(getReadyMessage(prefsRef.current))
+    console.log("[Voice] Models loaded")
+  }, [tts, loadLlm])
 
   const initWorker = useCallback(() => {
     if (workerRef.current) return
@@ -390,52 +497,7 @@ export function useVoiceAgent() {
             setDebugInfo((prev) => ({ ...prev, vadLoaded: true, sttLoaded: true }))
 
             if (setupPhaseRef.current === "loading") {
-              const ttsPrefs = prefsRef.current
-              const ttsEngineLabel =
-                TTS_ENGINE_OPTIONS.find((o) => o.id === ttsPrefs.ttsEngine)?.name ?? "TTS"
-              const ttsSize =
-                ttsPrefs.ttsEngine === "supertonic"
-                  ? "~400MB"
-                  : (PIPER_VOICES.find((v) => v.id === ttsPrefs.ttsVoice)?.sizeLabel ?? "~60MB")
-              setStatusMessage(`Loading ${ttsEngineLabel} TTS (${ttsSize})...`)
-              await tts.loadModels({
-                engine: ttsPrefs.ttsEngine,
-                voice: ttsPrefs.ttsVoice,
-              })
-              setDebugInfo((prev) => ({ ...prev, ttsLoaded: true }))
-
-              const selectedId = selectedLLMIdRef.current
-              const option = LLM_OPTIONS.find((o) => o.id === selectedId) || LLM_OPTIONS[0]
-              let llmReady = false
-
-              try {
-                if (option.backend === "gemma4") {
-                  setStatusMessage("Loading Gemma 4 E2B LLM (~3.2GB)...")
-                  llmReady = await gemma4Ref.current.loadModel()
-                } else {
-                  setStatusMessage(`Loading ${option.name} LLM (${option.sizeLabel})...`)
-                  llmReady = await webllmRef.current.loadModel(option.webllmId as never)
-                }
-              } catch (error) {
-                console.error("[Voice] LLM load error:", error)
-              }
-
-              if (!llmReady) {
-                setStatus("error")
-                setStatusMessage(
-                  option.backend === "gemma4"
-                    ? "Gemma 4 failed to load. Try Qwen via the dropdown selector, or check WebGPU / available memory."
-                    : "LLM failed to load. Check the browser console for details.",
-                )
-                break
-              }
-
-              setDebugInfo((prev) => ({ ...prev, llmLoaded: true, llmMode: selectedId }))
-
-              setSetupPhase("ready")
-              setStatus("ready")
-              setStatusMessage("Ready! Click 'Start Call' to begin.")
-              console.log("[Voice] Ready - STT, TTS, LLM loaded")
+              await loadTtsThenLlm()
             } else {
               setStatus("ready")
               setStatusMessage("STT loaded and ready!")
@@ -444,7 +506,7 @@ export function useVoiceAgent() {
             setStatus("loading")
             setStatusMessage(message)
           } else if (msgStatus === "listening") {
-            if (isCallActiveRef.current) {
+            if (isCallActiveRef.current || isMicActiveRef.current) {
               setStatus("listening")
               setStatusMessage("Listening...")
             }
@@ -458,6 +520,7 @@ export function useVoiceAgent() {
           break
 
         case "transcript":
+          if (!isCallActiveRef.current && !isMicActiveRef.current) break
           if (isFinal && text && text.trim()) {
             console.log("[STT]", text)
 
@@ -472,7 +535,9 @@ export function useVoiceAgent() {
               } else {
                 webllmRef.current.abort()
               }
-              tts.stop()
+              if (prefsRef.current.ttsEnabled) {
+                tts.stop()
+              }
               pendingUserInputRef.current = text.trim()
               return
             }
@@ -505,15 +570,19 @@ export function useVoiceAgent() {
     }
 
     workerRef.current = worker
-  }, [tts, handleLLMResponse])
+  }, [tts, handleLLMResponse, loadTtsThenLlm])
 
   const loadModels = useCallback(async () => {
-    initWorker()
     setStatus("loading")
-    setSttLoadProgress(0)
-    setStatusMessage("Loading STT models...")
-    workerRef.current?.postMessage({ type: "init" })
-  }, [initWorker])
+    if (prefsRef.current.sttEnabled) {
+      initWorker()
+      setSttLoadProgress(0)
+      setStatusMessage("Loading STT models...")
+      workerRef.current?.postMessage({ type: "init" })
+    } else {
+      await loadTtsThenLlm()
+    }
+  }, [initWorker, loadTtsThenLlm])
 
   const loadSTTOnly = useCallback(async () => {
     initWorker()
@@ -544,9 +613,12 @@ export function useVoiceAgent() {
       setSelectedLLMId(selection.llmId)
       selectedLLMIdRef.current = selection.llmId
       setSetupPhase("loading")
+      if (selection.ttsEnabled) {
+        tts.preparePlayback()
+      }
       loadModels()
     },
-    [loadModels],
+    [loadModels, tts],
   )
 
   const switchLLM = useCallback(
@@ -599,7 +671,7 @@ export function useVoiceAgent() {
 
         setDebugInfo((prev) => ({ ...prev, llmLoaded: true }))
         setStatus("ready")
-        setStatusMessage("Ready! Click 'Start Call' to begin.")
+        setStatusMessage(getReadyMessage(prefsRef.current))
       } catch (err) {
         console.error("[Voice] Switch LLM error:", err)
         setStatus("error")
@@ -665,11 +737,27 @@ export function useVoiceAgent() {
     }
   }, [isMicMuted])
 
+  const toggleMic = useCallback(async () => {
+    if (isMicActiveRef.current) {
+      setIsMicActive(false)
+      stopListening()
+      setStatus("ready")
+      setStatusMessage(getReadyMessage(prefsRef.current))
+      return
+    }
+
+    setIsMicActive(true)
+    await startListening()
+  }, [startListening, stopListening])
+
   const startCall = useCallback(async () => {
+    if (prefsRef.current.ttsEnabled) {
+      tts.preparePlayback()
+    }
     setIsCallActive(true)
     setMessages([])
     await startListening()
-  }, [startListening])
+  }, [startListening, tts])
 
   const endCall = useCallback(() => {
     abortControllerRef.current?.abort()
@@ -687,7 +775,7 @@ export function useVoiceAgent() {
     stopListening()
     tts.stop()
     setStatus("ready")
-    setStatusMessage("Ready! Click mic to start a new call.")
+    setStatusMessage(getReadyMessage(prefsRef.current))
   }, [stopListening, tts])
 
   const handleResetPreferences = useCallback(async () => {
@@ -696,6 +784,10 @@ export function useVoiceAgent() {
 
     if (isCallActiveRef.current) {
       setIsCallActive(false)
+      stopListening()
+    }
+    if (isMicActiveRef.current) {
+      setIsMicActive(false)
       stopListening()
     }
 
@@ -733,6 +825,9 @@ export function useVoiceAgent() {
 
   const submitTextMessage = useCallback(() => {
     if ((!textInput.trim() && !pendingImage) || status !== "ready") return
+    if (prefsRef.current.ttsEnabled) {
+      tts.preparePlayback()
+    }
     const userMessage: ChatMessage = {
       role: "user",
       content: textInput.trim(),
@@ -742,7 +837,7 @@ export function useVoiceAgent() {
     handleLLMResponse([...messagesRef.current, userMessage])
     setTextInput("")
     setPendingImage(null)
-  }, [textInput, pendingImage, status, handleLLMResponse])
+  }, [textInput, pendingImage, status, handleLLMResponse, tts])
 
   const clearConversation = useCallback(() => {
     setMessages([])
@@ -793,9 +888,13 @@ export function useVoiceAgent() {
     }
   }, [stopListening])
 
-  const waveformActive = status === "listening" || status === "recording"
+  const waveformActive =
+    status === "listening" || status === "recording"
   const waveformProcessing =
     status === "speaking" || status === "thinking" || status === "transcribing"
+
+  const hasCallMode = prefs.sttEnabled && prefs.ttsEnabled
+  const hasMicInput = prefs.sttEnabled && !prefs.ttsEnabled
 
   const voiceOptions =
     prefs.ttsEngine === "supertonic"
@@ -809,6 +908,9 @@ export function useVoiceAgent() {
     prefs,
     messages,
     isCallActive,
+    isMicActive,
+    hasCallMode,
+    hasMicInput,
     isMicMuted,
     textInput,
     setTextInput,
@@ -835,6 +937,7 @@ export function useVoiceAgent() {
     handleImageSelect,
     submitTextMessage,
     toggleMicMute,
+    toggleMic,
     startCall,
     endCall,
     switchLLM,

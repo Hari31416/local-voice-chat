@@ -7,6 +7,8 @@ const LEGACY_LLM_KEY = "voice_agent_selected_model"
 
 export interface UserPreferences {
   llmId: string
+  sttEnabled: boolean
+  ttsEnabled: boolean
   ttsEngine: TTSEngine
   ttsVoice: string
   ttsLanguage: TTSLanguage
@@ -15,6 +17,8 @@ export interface UserPreferences {
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
   llmId: DEFAULT_LLM_ID,
+  sttEnabled: true,
+  ttsEnabled: true,
   ttsEngine: "supertonic",
   ttsVoice: "F1",
   ttsLanguage: "auto",
@@ -32,6 +36,8 @@ function normalizePreferences(partial: Partial<UserPreferences>): UserPreference
 
   return {
     llmId,
+    sttEnabled: partial.sttEnabled !== false,
+    ttsEnabled: partial.ttsEnabled !== false,
     ttsEngine,
     ttsVoice,
     ttsLanguage: partial.ttsLanguage ?? "auto",
