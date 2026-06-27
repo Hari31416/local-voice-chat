@@ -196,7 +196,7 @@ export function useTTS(options: UseTTSOptions) {
   const synthesize = useCallback(
     async (
       text: string,
-      options?: { forQueue?: boolean },
+      options?: { forQueue?: boolean; live?: boolean },
     ): Promise<SynthesisResult> => {
       if (!readyRef.current) {
         throw new Error("TTS not loaded")
@@ -208,6 +208,7 @@ export function useTTS(options: UseTTSOptions) {
       try {
         const result = await synthesizeSpeech(engineRef.current, text, voiceRef.current, {
           language: languageRef.current,
+          live: options?.live,
           onProgress: (step, total) => {
             setSynthesisProgress(Math.round((step / total) * 100))
           },

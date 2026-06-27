@@ -227,25 +227,35 @@ export function useVoiceAgent() {
             })
           }
 
+          const synthOptions = { forQueue: true, live: true } as const
+
           const ttsTask = (async () => {
-            for await (const sentence of splitter) {
+            const iter = splitter[Symbol.asyncIterator]()
+            let prefetchedSynth: ReturnType<typeof tts.synthesize> | null = null
+
+            const pullSentence = () => iter.next()
+
+            let nextSentence = await pullSentence()
+
+            while (!nextSentence.done) {
               if (abortControllerRef.current?.signal.aborted) return
-              const result = await tts.synthesize(sentence, { forQueue: true })
+
+              const synthPromise =
+                prefetchedSynth ?? tts.synthesize(nextSentence.value, synthOptions)
+              prefetchedSynth = null
+
+              const followingSentence = pullSentence()
+              const result = await synthPromise
               if (abortControllerRef.current?.signal.aborted) return
+
               pcmChunks.push(result.audio)
               samplingRate = result.sampling_rate
               tts.enqueuePCM(result.audio, result.sampling_rate)
 
-              const url = pcmChunksToObjectUrl(pcmChunks, samplingRate)
-              setMessages((prev) => {
-                const copy = [...prev]
-                const last = copy[copy.length - 1]
-                if (last?.role === 'assistant') {
-                  if (last.audioUrl) URL.revokeObjectURL(last.audioUrl)
-                  copy[copy.length - 1] = { ...last, audioUrl: url, content: assistantMessage }
-                }
-                return copy
-              })
+              nextSentence = await followingSentence
+              if (!nextSentence.done) {
+                prefetchedSynth = tts.synthesize(nextSentence.value, synthOptions)
+              }
             }
           })()
 
@@ -262,6 +272,24 @@ export function useVoiceAgent() {
 
           await ttsTask
           await tts.waitUntilDone()
+
+          if (pcmChunks.length > 0) {
+            const url = pcmChunksToObjectUrl(pcmChunks, samplingRate)
+            setMessages((prev) => {
+              const copy = [...prev]
+              const last = copy[copy.length - 1]
+              if (last?.role === 'assistant') {
+                if (last.audioUrl) URL.revokeObjectURL(last.audioUrl)
+                copy[copy.length - 1] = {
+                  ...last,
+                  audioUrl: url,
+                  content: assistantMessage,
+                }
+              }
+              return copy
+            })
+          }
+
           console.log('[LLM]', assistantMessage)
         }
 

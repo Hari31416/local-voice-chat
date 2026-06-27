@@ -10,6 +10,7 @@ import {
 import type { LoadProgressCallback, SupertonicVoice, SynthesisResult, TTSLanguage } from "@/lib/tts-types"
 
 const DEFAULT_QUALITY = 8
+export const SUPERTRONIC_LIVE_QUALITY = 5
 const DEFAULT_SPEED = 1.05
 
 let enginePromise: Promise<{
@@ -45,6 +46,7 @@ export async function synthesizeSupertonic(
     language?: TTSLanguage
     quality?: number
     speed?: number
+    live?: boolean
     onProgress?: (step: number, total: number) => void
   } = {},
 ): Promise<SynthesisResult> {
@@ -54,11 +56,13 @@ export async function synthesizeSupertonic(
   const lang =
     options.language && options.language !== "auto" ? options.language : detectLanguage(text)
 
+  const quality = options.quality ?? (options.live ? SUPERTRONIC_LIVE_QUALITY : DEFAULT_QUALITY)
+
   const { wav, duration } = await textToSpeech.call(
     text,
     lang,
     style,
-    options.quality ?? DEFAULT_QUALITY,
+    quality,
     options.speed ?? DEFAULT_SPEED,
     0.3,
     options.onProgress,

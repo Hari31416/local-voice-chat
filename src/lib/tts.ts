@@ -65,6 +65,7 @@ export async function synthesizeSpeech(
     language?: TTSLanguage
     quality?: number
     speed?: number
+    live?: boolean
     onProgress?: (step: number, total: number) => void
   } = {},
 ): Promise<SynthesisResult> {

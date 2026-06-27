@@ -8,6 +8,7 @@ import { SetupScreen, type SetupSelection } from "@/components/setup-screen"
 import { cn } from "@/lib/utils"
 import type { ChatMessage, LoadProgress, SetupPhase, VoiceAgentStatus } from "@/lib/voice-agent-types"
 import { AudioWaveformPlayer } from "@/components/audio-waveform-player"
+import { MessageText } from "@/components/message-text"
 import type { UserPreferences } from "@/lib/user-preferences"
 
 interface ConversationAreaProps {
@@ -131,7 +132,7 @@ export function ConversationArea({
                         (msg.audioUrl || isSpeakingThis) && "min-w-[280px] xs:min-w-[320px] sm:min-w-[380px]"
                       )}
                     >
-                      <div>{msg.content}</div>
+                      <MessageText className="leading-relaxed">{msg.content}</MessageText>
                       {(msg.audioUrl || isSpeakingThis) && (
                         <AudioWaveformPlayer
                           src={msg.audioUrl ?? ""}
