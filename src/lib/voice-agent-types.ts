@@ -18,6 +18,7 @@ export interface ChatMessage {
   role: "user" | "assistant"
   content: string
   image?: string
+  audioUrl?: string
 }
 
 export interface DebugInfo {

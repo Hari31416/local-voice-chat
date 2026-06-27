@@ -119,3 +119,16 @@
     @apply bg-background text-foreground;
   }
 }
+
+@keyframes waveform-pulse {
+  0%, 100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(0.35);
+  }
+}
+
+.animate-waveform-pulse {
+  animation: waveform-pulse 1s ease-in-out infinite;
+}

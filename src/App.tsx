@@ -91,6 +91,8 @@ export default function App() {
               statusMessage={agent.statusMessage}
               isCallActive={agent.isCallActive}
               activeLoadProgress={agent.activeLoadProgress}
+              agentStatus={agent.status}
+              globalAnalyser={agent.tts.analyser}
               onSetupStart={agent.handleSetupStart}
               onResetPreferences={
                 agent.prefs.configured ? () => void agent.handleResetPreferences() : undefined

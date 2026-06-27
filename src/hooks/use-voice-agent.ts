@@ -23,6 +23,7 @@ import {
 } from "@/lib/user-preferences"
 import { PIPER_VOICES, SUPERTRONIC_VOICES, TTS_ENGINE_OPTIONS } from "@/lib/tts-voices"
 import { resizeImage } from "@/lib/utils"
+import { pcmToWav } from "@/lib/piper/wav"
 
 export function useVoiceAgent() {
   const [status, setStatus] = useState<VoiceAgentStatus>("idle")
@@ -220,10 +221,17 @@ export function useVoiceAgent() {
           throw new Error("LLM returned an empty response")
         }
 
-        setMessages((prev) => [...prev, { role: "assistant", content: assistantMessage }])
+        const result = await tts.synthesize(assistantMessage)
+        
+        // Encode PCM float32 to WAV
+        const wavBytes = pcmToWav(result.audio, result.sampling_rate)
+        const blob = new Blob([wavBytes], { type: "audio/wav" })
+        const url = URL.createObjectURL(blob)
+
+        setMessages((prev) => [...prev, { role: "assistant", content: assistantMessage, audioUrl: url }])
         console.log("[LLM]", assistantMessage)
 
-        await tts.speak(assistantMessage)
+        await tts.playPCM(result.audio, result.sampling_rate)
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") {
           console.debug("[Voice] Request aborted by user interruption")

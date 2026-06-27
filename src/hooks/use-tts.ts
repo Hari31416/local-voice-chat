@@ -38,6 +38,7 @@ export function useTTS(options: UseTTSOptions) {
   const audioContextRef = useRef<AudioContext | null>(null)
   const gainNodeRef = useRef<GainNode | null>(null)
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
   const [muted, setMutedState] = useState(false)
   const [language, setLanguageState] = useState<TTSLanguage>(initialLanguage)
   const [activeVoice, setActiveVoice] = useState(voice)
@@ -89,15 +90,8 @@ export function useTTS(options: UseTTSOptions) {
     }
   }, [updateStatus, onError])
 
-  const speak = useCallback(
-    async (text: string): Promise<void> => {
-      if (!readyRef.current) {
-        throw new Error("TTS not loaded")
-      }
-
-      setSynthesisProgress(0)
-      updateStatus("synthesizing")
-
+  const playPCM = useCallback(
+    async (audio: Float32Array, samplingRate: number): Promise<void> => {
       try {
         if (!audioContextRef.current) {
           audioContextRef.current = new AudioContext()
@@ -107,34 +101,25 @@ export function useTTS(options: UseTTSOptions) {
           await ctx.resume()
         }
 
-        const result = await synthesizeSpeech(engineRef.current, text, voiceRef.current, {
-          language: languageRef.current,
-          onProgress: (step, total) => {
-            setSynthesisProgress(Math.round((step / total) * 100))
-          },
-        })
-
-        setSynthesisProgress(100)
         updateStatus("speaking")
 
-        console.debug(`[TTS] ${engineRef.current}:`, {
-          voice: voiceRef.current,
-          language: result.language,
-          samples: result.audio.length,
-          sampleRate: result.sampling_rate,
-        })
-
-        const audioBuffer = ctx.createBuffer(1, result.audio.length, result.sampling_rate)
-        audioBuffer.getChannelData(0).set(result.audio)
+        const audioBuffer = ctx.createBuffer(1, audio.length, samplingRate)
+        audioBuffer.getChannelData(0).set(audio)
 
         if (!gainNodeRef.current) {
           gainNodeRef.current = ctx.createGain()
           gainNodeRef.current.connect(ctx.destination)
         }
 
+        if (!analyserRef.current) {
+          analyserRef.current = ctx.createAnalyser()
+          analyserRef.current.fftSize = 256
+        }
+
         const source = ctx.createBufferSource()
         source.buffer = audioBuffer
-        source.connect(gainNodeRef.current)
+        source.connect(analyserRef.current)
+        analyserRef.current.connect(gainNodeRef.current)
         sourceNodeRef.current = source
 
         await new Promise<void>((resolve) => {
@@ -147,7 +132,7 @@ export function useTTS(options: UseTTSOptions) {
 
         updateStatus("ready")
       } catch (error) {
-        console.error("TTS speak error:", error)
+        console.error("TTS playback error:", error)
         updateStatus("ready")
         onError?.(error as Error)
       }
@@ -183,6 +168,14 @@ export function useTTS(options: UseTTSOptions) {
       }
     },
     [updateStatus, onError],
+  )
+
+  const speak = useCallback(
+    async (text: string): Promise<void> => {
+      const result = await synthesize(text)
+      await playPCM(result.audio, result.sampling_rate)
+    },
+    [synthesize, playPCM],
   )
 
   const stop = useCallback(() => {
@@ -262,6 +255,8 @@ export function useTTS(options: UseTTSOptions) {
     loadModels,
     speak,
     synthesize,
+    playPCM,
+    analyser: analyserRef.current,
     stop,
     reset,
     muted,

@@ -6,7 +6,8 @@ import {
 import { Message, MessageContent } from "@/components/ui/message"
 import { SetupScreen, type SetupSelection } from "@/components/setup-screen"
 import { cn } from "@/lib/utils"
-import type { ChatMessage, LoadProgress, SetupPhase } from "@/lib/voice-agent-types"
+import type { ChatMessage, LoadProgress, SetupPhase, VoiceAgentStatus } from "@/lib/voice-agent-types"
+import { AudioWaveformPlayer } from "@/components/audio-waveform-player"
 import type { UserPreferences } from "@/lib/user-preferences"
 
 interface ConversationAreaProps {
@@ -17,6 +18,8 @@ interface ConversationAreaProps {
   statusMessage: string
   isCallActive: boolean
   activeLoadProgress: LoadProgress | null
+  agentStatus: VoiceAgentStatus
+  globalAnalyser: AnalyserNode | null
   onSetupStart: (selection: SetupSelection) => void
   onResetPreferences?: () => void
 }
@@ -29,6 +32,8 @@ export function ConversationArea({
   statusMessage,
   isCallActive,
   activeLoadProgress,
+  agentStatus,
+  globalAnalyser,
   onSetupStart,
   onResetPreferences,
 }: ConversationAreaProps) {
@@ -93,29 +98,48 @@ export function ConversationArea({
             )}
           </div>
         ) : (
-          messages.map((msg, i) => (
-            <Message key={i} from={msg.role === "user" ? "user" : "assistant"}>
-              <div
-                className={cn(
-                  "flex flex-col gap-1.5 max-w-[80%]",
-                  msg.role === "user" ? "items-end" : "items-start",
-                )}
-              >
-                {msg.image && (
-                  <img
-                    src={msg.image}
-                    alt="Uploaded visual context"
-                    className="max-h-48 rounded-lg object-contain border border-zinc-800 shadow-md"
-                  />
-                )}
-                {msg.content && (
-                  <MessageContent variant="contained" className="max-w-none">
-                    {msg.content}
-                  </MessageContent>
-                )}
-              </div>
-            </Message>
-          ))
+            messages.map((msg, i) => {
+              const isLatestAssistant = msg.role === "assistant" && i === messages.length - 1
+              const isSpeakingThis = isLatestAssistant && (agentStatus === "speaking" || agentStatus === "synthesizing")
+
+              return (
+                <Message key={i} from={msg.role === "user" ? "user" : "assistant"}>
+                  <div
+                    className={cn(
+                      "flex flex-col gap-1.5 max-w-[80%]",
+                      msg.role === "user" ? "items-end" : "items-start",
+                    )}
+                  >
+                    {msg.image && (
+                      <img
+                        src={msg.image}
+                        alt="Uploaded visual context"
+                        className="max-h-48 rounded-lg object-contain border border-zinc-800 shadow-md"
+                      />
+                    )}
+                    {msg.content && (
+                    <MessageContent
+                      variant="contained"
+                      className={cn(
+                        "max-w-none flex flex-col gap-2",
+                        msg.audioUrl && "min-w-[280px] xs:min-w-[320px] sm:min-w-[380px]"
+                      )}
+                    >
+                      <div>{msg.content}</div>
+                      {msg.audioUrl && (
+                        <AudioWaveformPlayer
+                          src={msg.audioUrl}
+                          variant="chat"
+                          isGlobalPlaying={isSpeakingThis}
+                          globalAnalyser={globalAnalyser}
+                        />
+                      )}
+                    </MessageContent>
+                  )}
+                </div>
+              </Message>
+            )
+          })
         )}
       </ConversationContent>
       <ConversationScrollButton />

@@ -1,23 +1,11 @@
-import { useState, useEffect, useRef } from "react"
-import {
-  Play,
-  Pause,
-  Square,
-  Download,
-  Sparkles,
-  AudioLines,
-  Settings,
-  RotateCcw,
-  RotateCw,
-  Volume2,
-  VolumeX,
-  Gauge,
-} from "lucide-react"
+import { useState, useEffect } from "react"
+import { Play, Square, Sparkles, AudioLines, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { useTTS } from "@/hooks/use-tts"
 import { PIPER_VOICES, SUPERTRONIC_VOICES, TTS_ENGINE_OPTIONS } from "@/lib/tts-voices"
 import { pcmToWav } from "@/lib/piper/wav"
 import { cn } from "@/lib/utils"
+import { AudioWaveformPlayer } from "@/components/audio-waveform-player"
 
 interface TTSStudioProps {
   tts: ReturnType<typeof useTTS>
@@ -28,15 +16,6 @@ export function TTSStudio({ tts }: TTSStudioProps) {
   const [engine, setEngine] = useState(tts.engine)
   const [voice, setVoice] = useState(tts.voice)
   const [wavUrl, setWavUrl] = useState<string | null>(null)
-
-  // Audio player state
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [currentTime, setCurrentTime] = useState(0)
-  const [duration, setDuration] = useState(0)
-  const [playbackRate, setPlaybackRate] = useState(1)
-  const [volume, setVolume] = useState(1)
-  const [isMuted, setIsMuted] = useState(false)
 
   const voices = engine === "supertonic" ? SUPERTRONIC_VOICES : PIPER_VOICES
 
@@ -49,22 +28,6 @@ export function TTSStudio({ tts }: TTSStudioProps) {
       setVoice(tts.voice)
     }
   }, [tts.engine, tts.voice])
-
-  // Sync properties whenever source audio wavUrl changes
-  useEffect(() => {
-    if (audioRef.current && wavUrl) {
-      audioRef.current.load()
-      audioRef.current.playbackRate = playbackRate
-      audioRef.current.volume = volume
-      audioRef.current.muted = isMuted
-      if (isPlaying) {
-        audioRef.current.play().catch((err) => {
-          console.error("Audio auto-playback failed:", err)
-          setIsPlaying(false)
-        })
-      }
-    }
-  }, [wavUrl])
 
   const handleEngineChange = (newEngine: typeof tts.engine) => {
     setEngine(newEngine)
@@ -82,100 +45,21 @@ export function TTSStudio({ tts }: TTSStudioProps) {
         URL.revokeObjectURL(wavUrl)
         setWavUrl(null)
       }
-
+      
       // Load current chosen engine & voice
       await tts.loadModels({ engine, voice })
-
+      
       const result = await tts.synthesize(text)
-
+      
       // Encode PCM float32 to WAV
       const wavBytes = pcmToWav(result.audio, result.sampling_rate)
       const blob = new Blob([wavBytes], { type: "audio/wav" })
       const url = URL.createObjectURL(blob)
-
-      setIsPlaying(true) // Triggers playing state when wavUrl changes
+      
       setWavUrl(url)
     } catch (err) {
       console.error("Synthesis failed:", err)
-      setIsPlaying(false)
     }
-  }
-
-  // Audio Event Handlers
-  const handleTimeUpdate = () => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime)
-    }
-  }
-
-  const handleLoadedMetadata = () => {
-    if (audioRef.current) {
-      setDuration(audioRef.current.duration)
-    }
-  }
-
-  const handleEnded = () => {
-    setIsPlaying(false)
-    setCurrentTime(0)
-  }
-
-  // Audio Actions
-  const togglePlay = () => {
-    if (!audioRef.current) return
-    if (isPlaying) {
-      audioRef.current.pause()
-      setIsPlaying(false)
-    } else {
-      audioRef.current.play().catch((err) => console.error("Playback failed:", err))
-      setIsPlaying(true)
-    }
-  }
-
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!audioRef.current) return
-    const newTime = parseFloat(e.target.value)
-    audioRef.current.currentTime = newTime
-    setCurrentTime(newTime)
-  }
-
-  const skipBackward = () => {
-    if (!audioRef.current) return
-    audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5)
-  }
-
-  const skipForward = () => {
-    if (!audioRef.current) return
-    audioRef.current.currentTime = Math.min(duration, audioRef.current.currentTime + 5)
-  }
-
-  const changeSpeed = () => {
-    if (!audioRef.current) return
-    const rates = [1, 1.25, 1.5, 2]
-    const nextIndex = (rates.indexOf(playbackRate) + 1) % rates.length
-    const nextRate = rates[nextIndex]
-    audioRef.current.playbackRate = nextRate
-    setPlaybackRate(nextRate)
-  }
-
-  const toggleMute = () => {
-    if (!audioRef.current) return
-    audioRef.current.muted = !isMuted
-    setIsMuted(!isMuted)
-  }
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!audioRef.current) return
-    const newVol = parseFloat(e.target.value)
-    audioRef.current.volume = newVol
-    setVolume(newVol)
-    setIsMuted(newVol === 0)
-    audioRef.current.muted = newVol === 0
-  }
-
-  const formatTime = (time: number) => {
-    const mins = Math.floor(time / 60)
-    const secs = Math.floor(time % 60)
-    return `${mins}:${secs.toString().padStart(2, "0")}`
   }
 
   return (
@@ -322,7 +206,7 @@ export function TTSStudio({ tts }: TTSStudioProps) {
                   </>
                 )}
               </Button>
-
+              
               {tts.isSynthesizing && (
                 <Button
                   onClick={tts.stop}
@@ -342,134 +226,8 @@ export function TTSStudio({ tts }: TTSStudioProps) {
                 <AudioLines className="h-4.5 w-4.5 text-teal-400" />
                 <span>Generated Audio Player</span>
               </div>
-
-              {/* Premium Custom Audio Player Controls */}
-              <div className="bg-zinc-950/60 border border-zinc-850 p-5 rounded-2xl flex flex-col gap-4">
-                {/* Hidden Audio Element */}
-                <audio
-                  ref={audioRef}
-                  src={wavUrl}
-                  onTimeUpdate={handleTimeUpdate}
-                  onLoadedMetadata={handleLoadedMetadata}
-                  onEnded={handleEnded}
-                  className="hidden"
-                />
-
-                {/* Timeline slider and seek */}
-                <div className="flex items-center gap-3 w-full">
-                  <span className="text-[10px] font-mono text-zinc-500 w-10 text-right">
-                    {formatTime(currentTime)}
-                  </span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={duration || 100}
-                    step={0.05}
-                    value={currentTime}
-                    onChange={handleSeek}
-                    className="flex-grow h-1.5 bg-zinc-800 rounded-full appearance-none cursor-pointer accent-blue-500 focus:outline-none"
-                    style={{
-                      background: `linear-gradient(to right, oklch(0.612 0.185 249.7) ${duration ? (currentTime / duration) * 100 : 0
-                        }%, oklch(0.269 0 0) ${duration ? (currentTime / duration) * 100 : 0}%)`,
-                    }}
-                  />
-                  <span className="text-[10px] font-mono text-zinc-500 w-10 text-left">
-                    {formatTime(duration)}
-                  </span>
-                </div>
-
-                {/* Control bar buttons */}
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-1">
-                  {/* Playback Controls (Play/Pause, Rewind, Fast Forward) */}
-                  <div className="flex items-center gap-3">
-                    <Button
-                      onClick={skipBackward}
-                      variant="ghost"
-                      size="icon"
-                      className="h-9 w-9 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer"
-                      title="Rewind 5 seconds"
-                    >
-                      <RotateCcw className="h-4.5 w-4.5" />
-                    </Button>
-
-                    <Button
-                      onClick={togglePlay}
-                      size="icon"
-                      className="h-12 w-12 rounded-full bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20 cursor-pointer"
-                      title={isPlaying ? "Pause" : "Play"}
-                    >
-                      {isPlaying ? (
-                        <Pause className="h-5 w-5 fill-white" />
-                      ) : (
-                        <Play className="h-5 w-5 fill-white ml-0.5" />
-                      )}
-                    </Button>
-
-                    <Button
-                      onClick={skipForward}
-                      variant="ghost"
-                      size="icon"
-                      className="h-9 w-9 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer"
-                      title="Forward 5 seconds"
-                    >
-                      <RotateCw className="h-4.5 w-4.5" />
-                    </Button>
-                  </div>
-
-                  {/* Settings Controls (Playback speed, Volume slider, WAV download) */}
-                  <div className="flex items-center gap-4 flex-wrap justify-center">
-                    {/* Playback speed trigger */}
-                    <button
-                      onClick={changeSpeed}
-                      type="button"
-                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-300 hover:text-white transition-all cursor-pointer"
-                      title="Playback Speed"
-                    >
-                      <Gauge className="h-3.5 w-3.5 text-blue-400" />
-                      <span>{playbackRate}x</span>
-                    </button>
-
-                    {/* Volume and Mute toggle */}
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={toggleMute}
-                        type="button"
-                        className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                        title={isMuted ? "Unmute" : "Mute"}
-                      >
-                        {isMuted || volume === 0 ? (
-                          <VolumeX className="h-4 w-4" />
-                        ) : (
-                          <Volume2 className="h-4 w-4" />
-                        )}
-                      </button>
-                      <input
-                        type="range"
-                        min={0}
-                        max={1}
-                        step={0.05}
-                        value={isMuted ? 0 : volume}
-                        onChange={handleVolumeChange}
-                        className="w-16 h-1 bg-zinc-800 rounded-full appearance-none cursor-pointer accent-blue-500 focus:outline-none"
-                        style={{
-                          background: `linear-gradient(to right, oklch(0.612 0.185 249.7) ${(isMuted ? 0 : volume) * 100
-                            }%, oklch(0.269 0 0) ${(isMuted ? 0 : volume) * 100}%)`,
-                        }}
-                      />
-                    </div>
-
-                    {/* Download WAV button */}
-                    <a
-                      href={wavUrl}
-                      download={`synthesis_${engine}_${voice}.wav`}
-                      className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-teal-500/10 to-emerald-500/10 border border-teal-500/30 hover:border-teal-500/50 hover:bg-gradient-to-r hover:from-teal-500/20 hover:to-emerald-500/20 text-teal-300 hover:text-white rounded-xl text-xs font-semibold transition-all shadow-md"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      <span>Download WAV</span>
-                    </a>
-                  </div>
-                </div>
-              </div>
+              
+              <AudioWaveformPlayer src={wavUrl} variant="studio" />
             </div>
           )}
         </div>
