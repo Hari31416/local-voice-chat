@@ -217,20 +217,6 @@ export function SetupScreen({
             )
           })}
         </div>
-        {ttsEngine === "piper" && (
-          <p className="text-[11px] text-zinc-500 mt-2">
-            Piper voices are language-specific. Hindi voices load from{" "}
-            <a
-              href="https://huggingface.co/rhasspy/piper-voices"
-              className="text-blue-400 hover:underline"
-              target="_blank"
-              rel="noreferrer"
-            >
-              rhasspy/piper-voices
-            </a>
-            .
-          </p>
-        )}
       </section>
 
       <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-3 text-[11px] text-zinc-400 space-y-1">
