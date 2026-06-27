@@ -39,6 +39,10 @@ export function useTTS(options: UseTTSOptions) {
   const gainNodeRef = useRef<GainNode | null>(null)
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
+  const playbackQueueRef = useRef<{ audio: Float32Array; samplingRate: number }[]>([])
+  const isPlayingQueueRef = useRef(false)
+  const stoppedRef = useRef(false)
+  const drainResolveRef = useRef<(() => void) | null>(null)
   const [muted, setMutedState] = useState(false)
   const [language, setLanguageState] = useState<TTSLanguage>(initialLanguage)
   const [activeVoice, setActiveVoice] = useState(voice)
@@ -90,58 +94,110 @@ export function useTTS(options: UseTTSOptions) {
     }
   }, [updateStatus, onError])
 
-  const playPCM = useCallback(
-    async (audio: Float32Array, samplingRate: number): Promise<void> => {
-      try {
-        if (!audioContextRef.current) {
-          audioContextRef.current = new AudioContext()
+  const ensureAudioContext = useCallback(async (): Promise<AudioContext> => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext()
+    }
+    const ctx = audioContextRef.current
+    if (ctx.state === "suspended") {
+      await ctx.resume()
+    }
+
+    if (!gainNodeRef.current) {
+      gainNodeRef.current = ctx.createGain()
+      gainNodeRef.current.connect(ctx.destination)
+    }
+
+    if (!analyserRef.current) {
+      analyserRef.current = ctx.createAnalyser()
+      analyserRef.current.fftSize = 256
+      analyserRef.current.connect(gainNodeRef.current)
+    }
+
+    return ctx
+  }, [])
+
+  const playNextInQueue = useCallback(async () => {
+    if (stoppedRef.current) {
+      playbackQueueRef.current = []
+      isPlayingQueueRef.current = false
+      drainResolveRef.current?.()
+      drainResolveRef.current = null
+      return
+    }
+
+    const next = playbackQueueRef.current.shift()
+    if (!next) {
+      isPlayingQueueRef.current = false
+      updateStatus("ready")
+      drainResolveRef.current?.()
+      drainResolveRef.current = null
+      return
+    }
+
+    try {
+      const ctx = await ensureAudioContext()
+      updateStatus("speaking")
+
+      const audioBuffer = ctx.createBuffer(1, next.audio.length, next.samplingRate)
+      audioBuffer.getChannelData(0).set(next.audio)
+
+      const source = ctx.createBufferSource()
+      source.buffer = audioBuffer
+      source.connect(analyserRef.current!)
+      sourceNodeRef.current = source
+
+      await new Promise<void>((resolve) => {
+        source.onended = () => {
+          sourceNodeRef.current = null
+          resolve()
         }
-        const ctx = audioContextRef.current
-        if (ctx.state === "suspended") {
-          await ctx.resume()
-        }
+        source.start()
+      })
+    } catch (error) {
+      console.error("TTS playback error:", error)
+      onError?.(error as Error)
+    }
 
-        updateStatus("speaking")
+    await playNextInQueue()
+  }, [ensureAudioContext, updateStatus, onError])
 
-        const audioBuffer = ctx.createBuffer(1, audio.length, samplingRate)
-        audioBuffer.getChannelData(0).set(audio)
-
-        if (!gainNodeRef.current) {
-          gainNodeRef.current = ctx.createGain()
-          gainNodeRef.current.connect(ctx.destination)
-        }
-
-        if (!analyserRef.current) {
-          analyserRef.current = ctx.createAnalyser()
-          analyserRef.current.fftSize = 256
-        }
-
-        const source = ctx.createBufferSource()
-        source.buffer = audioBuffer
-        source.connect(analyserRef.current)
-        analyserRef.current.connect(gainNodeRef.current)
-        sourceNodeRef.current = source
-
-        await new Promise<void>((resolve) => {
-          source.onended = () => {
-            sourceNodeRef.current = null
-            resolve()
-          }
-          source.start()
-        })
-
-        updateStatus("ready")
-      } catch (error) {
-        console.error("TTS playback error:", error)
-        updateStatus("ready")
-        onError?.(error as Error)
+  const enqueuePCM = useCallback(
+    (audio: Float32Array, samplingRate: number) => {
+      if (stoppedRef.current) return
+      playbackQueueRef.current.push({ audio, samplingRate })
+      if (!isPlayingQueueRef.current) {
+        isPlayingQueueRef.current = true
+        void playNextInQueue()
       }
     },
-    [updateStatus, onError],
+    [playNextInQueue],
+  )
+
+  const waitUntilDone = useCallback((): Promise<void> => {
+    if (!isPlayingQueueRef.current && playbackQueueRef.current.length === 0) {
+      return Promise.resolve()
+    }
+    return new Promise<void>((resolve) => {
+      drainResolveRef.current = resolve
+    })
+  }, [])
+
+  const playPCM = useCallback(
+    async (audio: Float32Array, samplingRate: number): Promise<void> => {
+      stoppedRef.current = false
+      playbackQueueRef.current = []
+      enqueuePCM(audio, samplingRate)
+      await waitUntilDone()
+    },
+    [enqueuePCM, waitUntilDone],
   )
 
   const synthesize = useCallback(
-    async (text: string): Promise<SynthesisResult> => {
+    async (
+      text: string,
+      options?: { forQueue?: boolean },
+    ): Promise<SynthesisResult> => {
       if (!readyRef.current) {
         throw new Error("TTS not loaded")
       }
@@ -158,11 +214,15 @@ export function useTTS(options: UseTTSOptions) {
         })
 
         setSynthesisProgress(100)
-        updateStatus("ready")
+        if (!options?.forQueue) {
+          updateStatus("ready")
+        }
         return result
       } catch (error) {
         console.error("TTS synthesize error:", error)
-        updateStatus("ready")
+        if (!options?.forQueue) {
+          updateStatus("ready")
+        }
         onError?.(error as Error)
         throw error
       }
@@ -179,10 +239,15 @@ export function useTTS(options: UseTTSOptions) {
   )
 
   const stop = useCallback(() => {
+    stoppedRef.current = true
+    playbackQueueRef.current = []
+    isPlayingQueueRef.current = false
     if (sourceNodeRef.current) {
       sourceNodeRef.current.stop()
       sourceNodeRef.current = null
     }
+    drainResolveRef.current?.()
+    drainResolveRef.current = null
     updateStatus("ready")
   }, [updateStatus])
 
@@ -256,6 +321,8 @@ export function useTTS(options: UseTTSOptions) {
     speak,
     synthesize,
     playPCM,
+    enqueuePCM,
+    waitUntilDone,
     analyser: analyserRef.current,
     stop,
     reset,

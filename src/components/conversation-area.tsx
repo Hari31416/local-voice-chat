@@ -128,13 +128,13 @@ export function ConversationArea({
                       variant="contained"
                       className={cn(
                         "max-w-none flex flex-col gap-2",
-                        msg.audioUrl && "min-w-[280px] xs:min-w-[320px] sm:min-w-[380px]"
+                        (msg.audioUrl || isSpeakingThis) && "min-w-[280px] xs:min-w-[320px] sm:min-w-[380px]"
                       )}
                     >
                       <div>{msg.content}</div>
-                      {msg.audioUrl && (
+                      {(msg.audioUrl || isSpeakingThis) && (
                         <AudioWaveformPlayer
-                          src={msg.audioUrl}
+                          src={msg.audioUrl ?? ""}
                           variant="chat"
                           isGlobalPlaying={isSpeakingThis}
                           globalAnalyser={globalAnalyser}

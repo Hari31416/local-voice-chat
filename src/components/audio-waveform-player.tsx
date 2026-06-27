@@ -67,17 +67,16 @@ export function AudioWaveformPlayer({
 
   // Handle source changes and load audio metadata
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.load()
-      audioRef.current.playbackRate = playbackRate
-      audioRef.current.volume = volume
-      audioRef.current.muted = isMuted
+    if (!src || !audioRef.current) return
+    audioRef.current.load()
+    audioRef.current.playbackRate = playbackRate
+    audioRef.current.volume = volume
+    audioRef.current.muted = isMuted
 
-      // If we were playing locally, reset local state
-      if (!isGlobalPlaying) {
-        setIsPlaying(false)
-        setCurrentTime(0)
-      }
+    // If we were playing locally, reset local state
+    if (!isGlobalPlaying) {
+      setIsPlaying(false)
+      setCurrentTime(0)
     }
   }, [src])
 
@@ -338,14 +337,18 @@ export function AudioWaveformPlayer({
     return (
       <div className="flex items-center gap-2 bg-zinc-950/50 border border-zinc-800/60 py-2.5 px-3 rounded-2xl w-full max-w-[360px]">
         {/* Hidden Audio */}
-        <audio
-          ref={audioRef}
-          src={src}
-          onTimeUpdate={handleTimeUpdate}
-          onLoadedMetadata={handleLoadedMetadata}
-          onEnded={handleEnded}
-          className="hidden"
-        />
+        {src ? (
+          <audio
+            ref={audioRef}
+            src={src}
+            onTimeUpdate={handleTimeUpdate}
+            onLoadedMetadata={handleLoadedMetadata}
+            onEnded={handleEnded}
+            className="hidden"
+          />
+        ) : (
+          <audio ref={audioRef} className="hidden" />
+        )}
 
         {/* Play/Pause icon */}
         <Button
@@ -439,14 +442,18 @@ export function AudioWaveformPlayer({
   return (
     <div className="bg-zinc-950/60 border border-zinc-850 p-5 rounded-2xl flex flex-col gap-4">
       {/* Hidden Audio Element */}
-      <audio
-        ref={audioRef}
-        src={src}
-        onTimeUpdate={handleTimeUpdate}
-        onLoadedMetadata={handleLoadedMetadata}
-        onEnded={handleEnded}
-        className="hidden"
-      />
+      {src ? (
+        <audio
+          ref={audioRef}
+          src={src}
+          onTimeUpdate={handleTimeUpdate}
+          onLoadedMetadata={handleLoadedMetadata}
+          onEnded={handleEnded}
+          className="hidden"
+        />
+      ) : (
+        <audio ref={audioRef} className="hidden" />
+      )}
 
       {/* Large visual interactive CSS Waveform */}
       <div className="flex items-center gap-3 w-full">

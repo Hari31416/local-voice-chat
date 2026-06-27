@@ -24,6 +24,23 @@ import {
 import { PIPER_VOICES, SUPERTRONIC_VOICES, TTS_ENGINE_OPTIONS } from "@/lib/tts-voices"
 import { resizeImage } from "@/lib/utils"
 import { pcmToWav } from "@/lib/piper/wav"
+import { TextSplitterStream } from "@/lib/splitter"
+
+function concatPCM(chunks: Float32Array[]): Float32Array {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
+  const combined = new Float32Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    combined.set(chunk, offset)
+    offset += chunk.length
+  }
+  return combined
+}
+
+function pcmChunksToObjectUrl(chunks: Float32Array[], samplingRate: number): string {
+  const wavBytes = pcmToWav(concatPCM(chunks), samplingRate)
+  return URL.createObjectURL(new Blob([wavBytes], { type: "audio/wav" }))
+}
 
 export function useVoiceAgent() {
   const [status, setStatus] = useState<VoiceAgentStatus>("idle")
@@ -215,6 +232,26 @@ export function useVoiceAgent() {
             }
             return copy
           })
+
+          if (!assistantMessage.trim()) {
+            throw new Error('LLM returned an empty response')
+          }
+
+          const result = await tts.synthesize(assistantMessage)
+          const wavBytes = pcmToWav(result.audio, result.sampling_rate)
+          const blob = new Blob([wavBytes], { type: 'audio/wav' })
+          const url = URL.createObjectURL(blob)
+
+          setMessages((prev) => {
+            const copy = [...prev]
+            if (copy.length > 0 && copy[copy.length - 1].role === 'assistant') {
+              copy[copy.length - 1] = { ...copy[copy.length - 1], audioUrl: url }
+            }
+            return copy
+          })
+          console.log('[LLM]', assistantMessage)
+
+          await tts.playPCM(result.audio, result.sampling_rate)
         } else {
           const currentWebllm = webllmRef.current
           if (!currentWebllm.isReady) {
@@ -224,9 +261,36 @@ export function useVoiceAgent() {
             `[Voice] Using WebLLM (${option.name}), history: ${recentHistory.length}/${conversationHistory.length}`
           )
 
+          const splitter = new TextSplitterStream()
+          const pcmChunks: Float32Array[] = []
+          let samplingRate = 22050
+
+          const ttsTask = (async () => {
+            for await (const sentence of splitter) {
+              if (abortControllerRef.current?.signal.aborted) return
+              const result = await tts.synthesize(sentence, { forQueue: true })
+              if (abortControllerRef.current?.signal.aborted) return
+              pcmChunks.push(result.audio)
+              samplingRate = result.sampling_rate
+              tts.enqueuePCM(result.audio, result.sampling_rate)
+
+              const url = pcmChunksToObjectUrl(pcmChunks, samplingRate)
+              setMessages((prev) => {
+                const copy = [...prev]
+                const last = copy[copy.length - 1]
+                if (last?.role === "assistant") {
+                  if (last.audioUrl) URL.revokeObjectURL(last.audioUrl)
+                  copy[copy.length - 1] = { ...last, audioUrl: url }
+                }
+                return copy
+              })
+            }
+          })()
+
           const generator = currentWebllm.chatStream(chatMessages, systemPrompt)
           for await (const delta of generator) {
             assistantMessage += delta
+            splitter.push(delta)
             setMessages((prev) => {
               const copy = [...prev]
               if (copy.length > 0 && copy[copy.length - 1].role === 'assistant') {
@@ -235,29 +299,16 @@ export function useVoiceAgent() {
               return copy
             })
           }
-        }
+          splitter.close()
 
-        if (!assistantMessage.trim()) {
-          throw new Error('LLM returned an empty response')
-        }
-
-        const result = await tts.synthesize(assistantMessage)
-        
-        // Encode PCM float32 to WAV
-        const wavBytes = pcmToWav(result.audio, result.sampling_rate)
-        const blob = new Blob([wavBytes], { type: 'audio/wav' })
-        const url = URL.createObjectURL(blob)
-
-        setMessages((prev) => {
-          const copy = [...prev]
-          if (copy.length > 0 && copy[copy.length - 1].role === 'assistant') {
-            copy[copy.length - 1] = { ...copy[copy.length - 1], audioUrl: url }
+          if (!assistantMessage.trim()) {
+            throw new Error('LLM returned an empty response')
           }
-          return copy
-        })
-        console.log('[LLM]', assistantMessage)
 
-        await tts.playPCM(result.audio, result.sampling_rate)
+          await ttsTask
+          await tts.waitUntilDone()
+          console.log('[LLM]', assistantMessage)
+        }
       } catch (error) {
         setMessages((prev) => {
           const copy = [...prev]
