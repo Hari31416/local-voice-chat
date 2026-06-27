@@ -9,6 +9,7 @@ import {
   TTS_ENGINE_OPTIONS,
 } from "@/lib/tts-voices"
 import { cn } from "@/lib/utils"
+import { defaultHindiTypingForLanguage } from "@/lib/user-preferences"
 import { RotateCcw } from "lucide-react"
 
 const SUPERTRONIC_LANGUAGES: { id: TTSLanguage; label: string }[] = [
@@ -25,6 +26,7 @@ export interface SetupSelection {
   ttsEngine: TTSEngine
   ttsVoice: string
   ttsLanguage: TTSLanguage
+  hindiTypingEnabled: boolean
 }
 
 interface SetupScreenProps {
@@ -56,6 +58,9 @@ export function SetupScreen({
   const [ttsEngine, setTtsEngine] = useStateSelection<TTSEngine>(initial.ttsEngine)
   const [ttsVoice, setTtsVoice] = useStateSelection(initial.ttsVoice)
   const [ttsLanguage, setTtsLanguage] = useStateSelection<TTSLanguage>(initial.ttsLanguage)
+  const [hindiTypingEnabled, setHindiTypingEnabled] = useStateSelection(
+    initial.hindiTypingEnabled ?? defaultHindiTypingForLanguage(initial.ttsLanguage),
+  )
 
   const selectedLlm = LLM_OPTIONS.find((o) => o.id === llmId) || LLM_OPTIONS[0]
   const selectedTtsEngine = TTS_ENGINE_OPTIONS.find((o) => o.id === ttsEngine)!
@@ -65,6 +70,13 @@ export function SetupScreen({
   const handleEngineChange = (engine: TTSEngine) => {
     setTtsEngine(engine)
     setTtsVoice(getDefaultVoiceForEngine(engine))
+  }
+
+  const handleTtsLanguageChange = (language: TTSLanguage) => {
+    setTtsLanguage(language)
+    if (defaultHindiTypingForLanguage(language)) {
+      setHindiTypingEnabled(true)
+    }
   }
 
   const estimatedDownload = (() => {
@@ -193,6 +205,23 @@ export function SetupScreen({
                 Full call mode with continuous voice conversation.
               </p>
             )}
+            <button
+              type="button"
+              onClick={() => setHindiTypingEnabled(!hindiTypingEnabled)}
+              className={cn(
+                'w-full p-2.5 rounded-lg border text-left transition-all duration-150 cursor-pointer',
+                hindiTypingEnabled
+                  ? 'bg-zinc-800/80 border-zinc-500 ring-1 ring-zinc-500/25'
+                  : 'bg-zinc-900/40 border-zinc-800 hover:bg-zinc-900/80 hover:border-zinc-700 opacity-70',
+              )}
+            >
+              <div className="font-semibold text-white text-xs">Hindi typing (Lipilekhika)</div>
+              <p className="text-[10px] text-zinc-500 mt-0.5">
+                {hindiTypingEnabled
+                  ? 'On · type Roman letters → Devanagari (e.g. namaste → नमस्ते)'
+                  : 'Off · type Devanagari directly or use English'}
+              </p>
+            </button>
           </section>
 
           {ttsEnabled && (
@@ -230,7 +259,7 @@ export function SetupScreen({
                 <label className="text-zinc-400 text-[10px] uppercase tracking-wider font-semibold">Language</label>
                 <select
                   value={ttsLanguage}
-                  onChange={(e) => setTtsLanguage(e.target.value as any)}
+                  onChange={(e) => handleTtsLanguageChange(e.target.value as TTSLanguage)}
                   className="w-full bg-zinc-905 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none cursor-pointer hover:border-zinc-700 focus:border-zinc-600 transition-colors"
                 >
                   {SUPERTRONIC_LANGUAGES.map((lang) => (
@@ -291,6 +320,7 @@ export function SetupScreen({
                   ttsEngine,
                   ttsVoice,
                   ttsLanguage: ttsEngine === 'supertonic' ? ttsLanguage : 'auto',
+                  hindiTypingEnabled,
                 })
               }
             >

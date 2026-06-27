@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react'
 import { Button } from "@/components/ui/button"
+import { HindiTypingInput } from "@/components/hindi-typing-input"
 import { LiveWaveform } from "@/components/ui/live-waveform"
 import type { useTTS } from "@/hooks/use-tts"
 import { LLM_OPTIONS } from "@/lib/llm-models"
@@ -47,6 +48,8 @@ interface ControlBarProps {
   selectedOptionName: string
   supportsVision: boolean
   onTextInputChange: (value: string) => void
+  hindiTypingEnabled: boolean
+  onHindiTypingChange: (enabled: boolean) => void
   onClearPendingImage: () => void
   onImageSelect: (file: File) => void
   onSubmitText: () => void
@@ -78,6 +81,8 @@ export function ControlBar({
   selectedOptionName,
   supportsVision,
   onTextInputChange,
+  hindiTypingEnabled,
+  onHindiTypingChange,
   onClearPendingImage,
   onImageSelect,
   onSubmitText,
@@ -271,14 +276,39 @@ export function ControlBar({
                     </div>
                   )}
 
-                  <input
-                    type="text"
-                    value={textInput}
-                    onChange={(e) => onTextInputChange(e.target.value)}
-                    placeholder={
-                      setupPhase !== 'ready' ? 'Loading models...' : 'How can I help?'
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => onHindiTypingChange(!hindiTypingEnabled)}
+                    disabled={status !== "ready"}
+                    className={cn(
+                      "h-7 w-7 rounded-full flex-shrink-0 text-[11px] font-bold",
+                      hindiTypingEnabled
+                        ? "bg-violet-500/20 text-violet-300 hover:bg-violet-500/30"
+                        : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800",
+                    )}
+                    title={
+                      hindiTypingEnabled
+                        ? "Hindi typing on — Roman → Devanagari (click to turn off)"
+                        : "Hindi typing off — click to type Roman → Devanagari"
                     }
-                    disabled={status !== 'ready'}
+                  >
+                    अ
+                  </Button>
+
+                  <HindiTypingInput
+                    value={textInput}
+                    onChange={onTextInputChange}
+                    enabled={hindiTypingEnabled}
+                    disabled={status !== "ready"}
+                    placeholder={
+                      setupPhase !== "ready"
+                        ? "Loading models..."
+                        : hindiTypingEnabled
+                          ? "Type in Roman — e.g. namaste"
+                          : "How can I help?"
+                    }
                     className="flex-1 bg-transparent text-zinc-200 text-sm outline-none placeholder:text-zinc-500 disabled:text-zinc-500"
                   />
 
@@ -405,6 +435,9 @@ export function ControlBar({
                               key={lang.id}
                               onClick={() => {
                                 tts.setLanguage(lang.id)
+                                if (lang.id === "hi" || lang.id === "na") {
+                                  onHindiTypingChange(true)
+                                }
                                 setShowLangMenu(false)
                               }}
                               className={cn(

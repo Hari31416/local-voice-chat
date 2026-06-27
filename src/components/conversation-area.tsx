@@ -63,6 +63,7 @@ export function ConversationArea({
                   ttsEngine: prefs.ttsEngine,
                   ttsVoice: prefs.ttsVoice,
                   ttsLanguage: prefs.ttsLanguage,
+                  hindiTypingEnabled: prefs.hindiTypingEnabled,
                 }}
                 isMobile={isMobile}
                 hasSavedConfig={prefs.configured}

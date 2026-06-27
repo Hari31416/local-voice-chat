@@ -12,6 +12,8 @@ export interface UserPreferences {
   ttsEngine: TTSEngine
   ttsVoice: string
   ttsLanguage: TTSLanguage
+  /** Roman → Devanagari typing in the message box (Lipilekhika). */
+  hindiTypingEnabled: boolean
   configured: boolean
 }
 
@@ -22,7 +24,12 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   ttsEngine: "supertonic",
   ttsVoice: "F1",
   ttsLanguage: "auto",
+  hindiTypingEnabled: false,
   configured: false,
+}
+
+export function defaultHindiTypingForLanguage(language: TTSLanguage): boolean {
+  return language === "hi" || language === "na"
 }
 
 function normalizePreferences(partial: Partial<UserPreferences>): UserPreferences {
@@ -41,6 +48,7 @@ function normalizePreferences(partial: Partial<UserPreferences>): UserPreference
     ttsEngine,
     ttsVoice,
     ttsLanguage: partial.ttsLanguage ?? "auto",
+    hindiTypingEnabled: partial.hindiTypingEnabled === true,
     configured: partial.configured === true,
   }
 }

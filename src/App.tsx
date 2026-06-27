@@ -135,6 +135,8 @@ export default function App() {
               selectedOptionName={agent.selectedOption.name}
               supportsVision={agent.selectedOption.supportsVision}
               onTextInputChange={agent.setTextInput}
+              hindiTypingEnabled={agent.prefs.hindiTypingEnabled}
+              onHindiTypingChange={agent.setHindiTypingEnabled}
               onClearPendingImage={() => agent.setPendingImage(null)}
               onImageSelect={agent.handleImageSelect}
               onSubmitText={agent.submitTextMessage}

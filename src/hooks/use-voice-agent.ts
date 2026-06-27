@@ -839,6 +839,13 @@ export function useVoiceAgent() {
     setPendingImage(null)
   }, [textInput, pendingImage, status, handleLLMResponse, tts])
 
+  const setHindiTypingEnabled = useCallback((enabled: boolean) => {
+    const next = { ...prefsRef.current, hindiTypingEnabled: enabled, configured: true }
+    savePreferences(next)
+    setPrefs(next)
+    prefsRef.current = next
+  }, [])
+
   const clearConversation = useCallback(() => {
     setMessages([])
     setPendingImage(null)
@@ -914,6 +921,7 @@ export function useVoiceAgent() {
     isMicMuted,
     textInput,
     setTextInput,
+    setHindiTypingEnabled,
     selectedLLMId,
     pendingImage,
     setPendingImage,
