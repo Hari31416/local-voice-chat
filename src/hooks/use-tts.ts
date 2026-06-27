@@ -1,31 +1,35 @@
 /**
- * Hook for browser-based TTS using Supertonic 3 (ONNX Runtime Web)
+ * Hook for browser-based TTS (Supertonic 3 or Piper via ONNX Runtime Web)
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
-  loadEngine,
+  loadTTSEngine,
   loadVoice,
   synthesizeSpeech,
-  type TTSVoice,
+  unloadAllTTS,
+  type TTSEngine,
   type TTSLanguage,
+  type TTSVoice,
 } from "@/lib/tts"
+import { getDefaultVoiceForEngine } from "@/lib/tts-voices"
 
 export type TTSStatus = "idle" | "loading" | "ready" | "speaking" | "error"
-export type { TTSVoice, TTSLanguage }
+export type { TTSVoice, TTSLanguage, TTSEngine }
 
 interface UseTTSOptions {
+  engine: TTSEngine
+  voice: string
+  language?: TTSLanguage
   onStatusChange?: (status: TTSStatus) => void
   onError?: (error: Error) => void
 }
 
-export function useTTS(options: UseTTSOptions = {}) {
-  const { onStatusChange, onError } = options
+export function useTTS(options: UseTTSOptions) {
+  const { engine, voice, language: initialLanguage = "auto", onStatusChange, onError } = options
 
   const [status, setStatus] = useState<TTSStatus>("idle")
   const [loadProgress, setLoadProgress] = useState(0)
-  const [voice, setVoice] = useState<TTSVoice>("F1")
-  const [language, setLanguage] = useState<TTSLanguage>("auto")
   const [backend, setBackend] = useState<"webgpu" | "wasm" | null>(null)
 
   const readyRef = useRef(false)
@@ -33,8 +37,12 @@ export function useTTS(options: UseTTSOptions = {}) {
   const gainNodeRef = useRef<GainNode | null>(null)
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null)
   const [muted, setMutedState] = useState(false)
-  const voiceRef = useRef<TTSVoice>("F1")
-  const languageRef = useRef<TTSLanguage>("auto")
+  const [language, setLanguageState] = useState<TTSLanguage>(initialLanguage)
+  const [activeVoice, setActiveVoice] = useState(voice)
+
+  const engineRef = useRef(engine)
+  const voiceRef = useRef(voice)
+  const languageRef = useRef(initialLanguage)
 
   const updateStatus = useCallback(
     (newStatus: TTSStatus) => {
@@ -44,17 +52,26 @@ export function useTTS(options: UseTTSOptions = {}) {
     [onStatusChange],
   )
 
-  const loadModels = useCallback(async () => {
+  const loadModels = useCallback(async (override?: { engine?: TTSEngine; voice?: string }) => {
     if (readyRef.current) return
 
+    const activeEngine = override?.engine ?? engineRef.current
+    const activeVoice = override?.voice ?? voiceRef.current
+    engineRef.current = activeEngine
+    voiceRef.current = activeVoice
+    setActiveVoice(activeVoice)
+
     updateStatus("loading")
+    setLoadProgress(0)
 
     try {
-      const { backend: activeBackend } = await loadEngine((info) => {
-        setLoadProgress(Math.round((info.current / info.total) * 100))
-      })
-
-      await loadVoice(voiceRef.current)
+      const { backend: activeBackend } = await loadTTSEngine(
+        activeEngine,
+        activeVoice,
+        (info) => {
+          setLoadProgress(info.progress)
+        },
+      )
 
       setBackend(activeBackend)
       readyRef.current = true
@@ -83,11 +100,11 @@ export function useTTS(options: UseTTSOptions = {}) {
           await ctx.resume()
         }
 
-        const result = await synthesizeSpeech(text, voiceRef.current, {
+        const result = await synthesizeSpeech(engineRef.current, text, voiceRef.current, {
           language: languageRef.current,
         })
 
-        console.debug("[TTS] Supertonic 3:", {
+        console.debug(`[TTS] ${engineRef.current}:`, {
           voice: voiceRef.current,
           language: result.language,
           samples: result.audio.length,
@@ -140,26 +157,46 @@ export function useTTS(options: UseTTSOptions = {}) {
     }
   }, [])
 
-  const changeVoice = useCallback(async (newVoice: TTSVoice) => {
-    voiceRef.current = newVoice
-    setVoice(newVoice)
-    if (readyRef.current) {
-      await loadVoice(newVoice)
-    }
-  }, [])
+  const changeVoice = useCallback(
+    async (newVoice: string) => {
+      voiceRef.current = newVoice
+      setActiveVoice(newVoice)
+      if (readyRef.current) {
+        await loadVoice(engineRef.current, newVoice, (info) => {
+          setLoadProgress(info.progress)
+        })
+      }
+    },
+    [],
+  )
 
   const changeLanguage = useCallback((newLanguage: TTSLanguage) => {
     languageRef.current = newLanguage
-    setLanguage(newLanguage)
+    setLanguageState(newLanguage)
   }, [])
+
+  const reset = useCallback(async () => {
+    stop()
+    await unloadAllTTS()
+    readyRef.current = false
+    setBackend(null)
+    setLoadProgress(0)
+    updateStatus("idle")
+  }, [stop, updateStatus])
+
+  useEffect(() => {
+    engineRef.current = engine
+  }, [engine])
 
   useEffect(() => {
     voiceRef.current = voice
+    setActiveVoice(voice)
   }, [voice])
 
   useEffect(() => {
-    languageRef.current = language
-  }, [language])
+    languageRef.current = initialLanguage
+    setLanguageState(initialLanguage)
+  }, [initialLanguage])
 
   useEffect(() => {
     return () => {
@@ -170,7 +207,8 @@ export function useTTS(options: UseTTSOptions = {}) {
   return {
     status,
     loadProgress,
-    voice,
+    engine,
+    voice: activeVoice,
     setVoice: changeVoice,
     language,
     setLanguage: changeLanguage,
@@ -178,10 +216,15 @@ export function useTTS(options: UseTTSOptions = {}) {
     loadModels,
     speak,
     stop,
+    reset,
     muted,
     setMuted,
     isReady: status === "ready",
     isLoading: status === "loading",
     isSpeaking: status === "speaking",
   }
+}
+
+export function getDefaultTTSVoice(engine: TTSEngine): string {
+  return getDefaultVoiceForEngine(engine)
 }

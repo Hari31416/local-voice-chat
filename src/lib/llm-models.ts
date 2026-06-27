@@ -1,3 +1,8 @@
+const isIOS =
+  typeof navigator !== "undefined" && /iPad|iPhone|iPod/.test(navigator.userAgent)
+
+export const DEFAULT_LLM_ID = isIOS ? "qwen-0.5b" : "gemma4"
+
 export type LLMBackend = 'gemma4' | 'webllm'
 
 export interface LLMOption {

@@ -1,81 +1,97 @@
 import {
-  detectLanguage,
-  loadTextToSpeech,
-  loadVoiceStyle,
-  TextToSpeech,
-  type LoadProgressCallback,
-  type Style,
-  type SupertonicLang,
-  voiceStyleUrl,
-  ONNX_DIR,
-} from "./supertonic3/engine";
+  loadPiperVoice,
+  synthesizePiper,
+  unloadPiper,
+} from "@/lib/tts-providers/piper"
+import {
+  loadSupertonicEngine,
+  loadSupertonicVoice,
+  synthesizeSupertonic,
+  unloadSupertonic,
+} from "@/lib/tts-providers/supertonic"
+import type {
+  LoadProgressCallback,
+  SupertonicVoice,
+  SynthesisResult,
+  TTSEngine,
+  TTSLanguage,
+} from "@/lib/tts-types"
+import { getDefaultVoiceForEngine } from "@/lib/tts-voices"
 
-export type TTSVoice = "F1" | "F2" | "F3" | "F4" | "F5" | "M1" | "M2" | "M3" | "M4" | "M5";
-export type TTSLanguage = "auto" | SupertonicLang;
+export type { TTSEngine, TTSVoice, TTSLanguage, SupertonicVoice } from "@/lib/tts-types"
+export { detectLanguage } from "@/lib/tts-providers/supertonic"
 
-const DEFAULT_QUALITY = 8;
-const DEFAULT_SPEED = 1.05;
+let activeEngine: TTSEngine | null = null
 
-let enginePromise: Promise<{
-  textToSpeech: TextToSpeech;
-  backend: "webgpu" | "wasm";
-}> | null = null;
+export async function loadTTSEngine(
+  engine: TTSEngine,
+  voice: string,
+  progressCallback?: LoadProgressCallback,
+): Promise<{ backend: "webgpu" | "wasm" }> {
+  if (activeEngine && activeEngine !== engine) {
+    await unloadTTSEngine(activeEngine)
+  }
 
-const styleCache = new Map<TTSVoice, Style>();
+  activeEngine = engine
 
-export async function loadEngine(progressCallback?: LoadProgressCallback) {
-  return (enginePromise ??= loadTextToSpeech(ONNX_DIR, progressCallback));
+  if (engine === "supertonic") {
+    const { backend } = await loadSupertonicEngine(progressCallback)
+    await loadSupertonicVoice((voice || getDefaultVoiceForEngine("supertonic")) as SupertonicVoice)
+    return { backend }
+  }
+
+  return loadPiperVoice(voice || getDefaultVoiceForEngine("piper"), progressCallback)
 }
 
-export async function loadVoice(voice: TTSVoice): Promise<Style> {
-  const cached = styleCache.get(voice);
-  if (cached) return cached;
+export async function loadVoice(
+  engine: TTSEngine,
+  voice: string,
+  progressCallback?: LoadProgressCallback,
+): Promise<void> {
+  if (engine === "supertonic") {
+    await loadSupertonicVoice(voice as SupertonicVoice)
+    return
+  }
 
-  const style = await loadVoiceStyle([voiceStyleUrl(voice)]);
-  styleCache.set(voice, style);
-  return style;
-}
-
-export interface SynthesisResult {
-  audio: Float32Array;
-  sampling_rate: number;
-  language: SupertonicLang;
+  await loadPiperVoice(voice, progressCallback)
+  activeEngine = engine
 }
 
 export async function synthesizeSpeech(
+  engine: TTSEngine,
   text: string,
-  voice: TTSVoice,
+  voice: string,
   options: {
-    language?: TTSLanguage;
-    quality?: number;
-    speed?: number;
-    onProgress?: (step: number, total: number) => void;
+    language?: TTSLanguage
+    quality?: number
+    speed?: number
+    onProgress?: (step: number, total: number) => void
   } = {},
 ): Promise<SynthesisResult> {
-  const { textToSpeech } = await loadEngine();
-  const style = await loadVoice(voice);
+  if (engine === "supertonic") {
+    return synthesizeSupertonic(text, voice as SupertonicVoice, options)
+  }
 
-  const lang =
-    options.language && options.language !== "auto"
-      ? options.language
-      : detectLanguage(text);
+  return synthesizePiper(text)
+}
 
-  const { wav, duration } = await textToSpeech.call(
-    text,
-    lang,
-    style,
-    options.quality ?? DEFAULT_QUALITY,
-    options.speed ?? DEFAULT_SPEED,
-    0.3,
-    options.onProgress,
-  );
+export async function unloadTTSEngine(engine: TTSEngine): Promise<void> {
+  if (engine === "supertonic") {
+    await unloadSupertonic()
+  } else {
+    await unloadPiper()
+  }
 
-  const wavLen = Math.floor(textToSpeech.sampleRate * duration[0]);
-  const trimmed = wav.slice(0, wavLen);
+  if (activeEngine === engine) {
+    activeEngine = null
+  }
+}
 
-  return {
-    audio: Float32Array.from(trimmed),
-    sampling_rate: textToSpeech.sampleRate,
-    language: lang,
-  };
+export async function unloadAllTTS(): Promise<void> {
+  await Promise.all([unloadSupertonic(), unloadPiper()])
+  activeEngine = null
+}
+
+export function getActiveTTSEngine(): TTSEngine | null {
+  return activeEngine
 }

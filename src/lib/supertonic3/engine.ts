@@ -5,6 +5,7 @@
 
 import type * as OrtNamespace from "onnxruntime-web";
 import { fetchCachedArrayBuffer, fetchCachedJson } from "@/lib/asset-cache";
+import { configureOrtWasm } from "@/lib/ort-config";
 
 export const AVAILABLE_LANGS = [
   "en", "ko", "ja", "ar", "bg", "cs", "da", "de", "el", "es", "et", "fi", "fr",
@@ -23,9 +24,7 @@ let ortModule: typeof OrtNamespace | null = null;
 export async function getOrt(): Promise<typeof OrtNamespace> {
   if (ortModule) return ortModule;
   ortModule = await import("onnxruntime-web");
-  ortModule.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/";
-  // Suppress benign WebGPU EP assignment warnings (some ops intentionally run on WASM/CPU).
-  ortModule.env.logLevel = "error";
+  configureOrtWasm(ortModule);
   return ortModule;
 }
 

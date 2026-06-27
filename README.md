@@ -2,7 +2,7 @@
 
 A hands-free AI voice assistant that runs entirely in your browser. Speech recognition, LLM, and text-to-speech all run locally using WebGPU — no API keys, no server, no data leaves your device.
 
-Based on [activated-intelligence/voice-chat](https://github.com/activated-intelligence/voice-chat), with **Supertonic 3** for multilingual TTS (English + Hindi).
+Based on [activated-intelligence/voice-chat](https://github.com/activated-intelligence/voice-chat), with **Supertonic 3** or **Piper** for TTS (English + Hindi).
 
 ## What Makes This Different
 
@@ -11,9 +11,9 @@ Based on [activated-intelligence/voice-chat](https://github.com/activated-intell
 - **Speech-to-Text**: Whisper model via WebGPU/WASM
 - **Voice Activity Detection**: Silero VAD detects when you're speaking
 - **LLM**: Gemma 4 E2B via Transformers.js + ONNX WebGPU (`onnx-community/gemma-4-E2B-it-ONNX`)
-- **Text-to-Speech**: **Supertonic 3** — 31 languages including English and Hindi
+- **Text-to-Speech**: **Supertonic 3** (multilingual) or **Piper** (lightweight per-voice models)
 
-No audio leaves your device. No API keys needed. Just open and talk.
+No audio leaves your device. No API keys needed. Pick your models on the setup screen, then talk.
 
 ## Quick Start
 
@@ -38,10 +38,15 @@ Open [http://localhost:5173](http://localhost:5173) in Chrome or Edge.
 | Whisper STT model | ~150MB | First use | ✓ IndexedDB |
 | Silero VAD model | ~2MB | First use | ✓ IndexedDB |
 | Gemma 4 E2B LLM | ~3.2GB | First use | ✓ IndexedDB |
-| Supertonic 3 TTS | ~400MB | First use | ✓ Cache API |
-| Voice styles | ~300KB each | On voice select | ✓ Memory |
+| Supertonic 3 TTS | ~400MB | First use (if selected) | ✓ Cache API |
+| Piper TTS voice | ~15–75MB each | First use (if selected) | ✓ OPFS / browser cache |
+| Voice styles (Supertonic) | ~300KB each | On voice select | ✓ Memory |
 
-First load downloads ~4GB of models from HuggingFace CDN. After that, everything runs offline.
+First load downloads models based on your setup choices (typically 1–4GB) from HuggingFace CDN. After that, everything runs offline.
+
+## Model setup
+
+On first launch you pick **LLM**, **TTS engine** (Supertonic 3 or Piper), and **voice** before any downloads begin. Choices are saved in `localStorage` and can be cleared with **Reset choices** on the setup screen or in the debug panel.
 
 ## Requirements
 
@@ -49,29 +54,49 @@ First load downloads ~4GB of models from HuggingFace CDN. After that, everything
 - **RAM**: ~6GB available for models (Gemma 4 E2B + STT + TTS)
 - **Microphone**: Required for voice input
 
-TTS falls back to WASM if WebGPU is unavailable.
+TTS falls back to WASM if WebGPU is unavailable (Supertonic). Piper always uses WASM.
 
-## TTS: Supertonic 3
+## TTS engines
 
-Uses the official [Supertone/supertonic-3](https://huggingface.co/Supertone/supertonic-3) ONNX models via `onnxruntime-web`, adapted from the [Supertone browser example](https://github.com/supertone-inc/supertonic/tree/main/web).
+### Supertonic 3
 
-- **Languages**: Auto-detect, English, Hindi, or Hinglish (`na` for code-mixed)
+Uses [Supertone/supertonic-3](https://huggingface.co/Supertone/supertonic-3) (~400MB engine + style files) via `onnxruntime-web`.
+
+- **Languages**: Auto-detect, English, Hindi, or Hinglish
 - **Voices**: 10 preset styles (F1–F5, M1–M5)
 - **Inference**: WebGPU with WASM fallback
+
+### Piper
+
+Uses [@realtimex/piper-tts-web](https://github.com/therealtimex/piper-tts-web) with voices from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices) (~60MB per voice).
+
+- **Languages**: One language per voice (English US/UK, Hindi)
+- **Inference**: WASM via ONNX Runtime Web
+- Hindi voices load directly from rhasspy/piper-voices
 
 ## Project Structure
 
 ```
 src/
 ├── App.tsx                   # Main voice chat UI
+├── components/
+│   └── setup-screen.tsx      # Pre-download model & voice picker
 ├── main.tsx                  # Vite entry point
 ├── index.css                 # Tailwind + shadcn theme
 ├── hooks/
 │   ├── use-gemma4.ts         # Gemma 4 E2B via Transformers.js (default LLM)
 │   ├── use-webllm.ts         # WebLLM / Qwen fallback
-│   └── use-tts.ts            # Supertonic 3 TTS hook
+│   └── use-tts.ts            # Supertonic 3 + Piper TTS hook
 └── lib/
-    ├── tts.ts                # TTS API wrapper
+    ├── tts.ts                # TTS provider facade
+    ├── tts-voices.ts         # Curated voice catalogs
+    ├── user-preferences.ts   # Saved model/voice choices
+    ├── tts-providers/
+    │   ├── supertonic.ts
+    │   └── piper.ts
+    ├── piper/
+    │   ├── rhasspy-session.ts
+    │   └── wav.ts
     └── supertonic3/
         └── engine.ts         # Supertonic 3 ONNX inference
 
@@ -91,7 +116,7 @@ Default is **Gemma 4 E2B** (`onnx-community/gemma-4-E2B-it-ONNX`) via `@huggingf
 - **STT**: Whisper via @huggingface/transformers
 - **VAD**: Silero VAD via ONNX Runtime
 - **LLM**: Gemma 4 E2B via @huggingface/transformers (WebGPU ONNX); Qwen fallback via @mlc-ai/web-llm
-- **TTS**: Supertonic 3 via onnxruntime-web
+- **TTS**: Supertonic 3 or Piper via onnxruntime-web / @realtimex/piper-tts-web
 - **Styling**: Tailwind CSS v4
 
 ## License
@@ -101,7 +126,8 @@ MIT License — see [LICENSE](LICENSE)
 ## Credits
 
 - [activated-intelligence/voice-chat](https://github.com/activated-intelligence/voice-chat) — voice pipeline foundation
-- [Supertonic 3](https://github.com/supertone-inc/supertonic) — TTS engine
+- [Supertonic 3](https://github.com/supertone-inc/supertonic) — multilingual TTS engine
+- [Piper](https://github.com/rhasspy/piper) / [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices) — lightweight TTS option
 - [Whisper](https://github.com/openai/whisper) — OpenAI
 - [Gemma 4 E2B ONNX](https://huggingface.co/onnx-community/gemma-4-E2B-it-ONNX) — default LLM
 - [Gemma 4 WebGPU Kernels demo](https://huggingface.co/spaces/webml-community/gemma-4-webgpu-kernels) — reference implementation

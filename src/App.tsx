@@ -3,20 +3,28 @@ import { Button } from '@/components/ui/button'
 import { LiveWaveform } from '@/components/ui/live-waveform'
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ui/conversation'
 import { Message, MessageContent } from '@/components/ui/message'
+import { SetupScreen, type SetupSelection } from '@/components/setup-screen'
 import { Mic, MicOff, Volume2, VolumeX, Phone, PhoneOff, ChevronDown, Settings, X, Camera, RotateCcw, AlertTriangle, Info } from 'lucide-react'
-import { useTTS, type TTSVoice, type TTSLanguage } from '@/hooks/use-tts'
+import { useTTS, type TTSLanguage } from '@/hooks/use-tts'
 import { useGemma4 } from '@/hooks/use-gemma4'
 import { useWebLLM } from '@/hooks/use-webllm'
 import { detectLanguage } from '@/lib/supertonic3/engine'
-import { LLM_OPTIONS } from '@/lib/llm-models'
+import { DEFAULT_LLM_ID, LLM_OPTIONS } from '@/lib/llm-models'
+import {
+  clearPreferences,
+  DEFAULT_PREFERENCES,
+  loadPreferences,
+  savePreferences,
+  type UserPreferences,
+} from '@/lib/user-preferences'
+import { PIPER_VOICES, SUPERTRONIC_VOICES, TTS_ENGINE_OPTIONS } from '@/lib/tts-voices'
 import { resizeImage, cn } from '@/lib/utils'
+import { isCrossOriginIsolated } from "@/lib/ort-config"
 
 type Status = 'idle' | 'loading' | 'ready' | 'listening' | 'recording' | 'transcribing' | 'thinking' | 'speaking' | 'error'
+type SetupPhase = 'selecting' | 'loading' | 'ready'
 
-// Detect iOS/iPadOS
 const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent)
-
-const DEFAULT_LLM_ID = isIOS ? 'qwen-0.5b' : 'gemma4'
 
 const BASE_SYSTEM_PROMPT = `You are a warm, helpful voice assistant in a hands-free chat.
 
@@ -60,7 +68,9 @@ interface ChatMessage {
 
 export default function App() {
   const [status, setStatus] = useState<Status>('idle')
-  const [statusMessage, setStatusMessage] = useState('Click \'Initialize\' to load models')
+  const [statusMessage, setStatusMessage] = useState('Choose your models to begin')
+  const [setupPhase, setSetupPhase] = useState<SetupPhase>('selecting')
+  const [prefs, setPrefs] = useState<UserPreferences>(() => loadPreferences())
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isCallActive, setIsCallActive] = useState(false)
   const [isMicMuted, setIsMicMuted] = useState(false)
@@ -68,21 +78,7 @@ export default function App() {
   const [showLangMenu, setShowLangMenu] = useState(false)
   const [showLLMMenu, setShowLLMMenu] = useState(false)
   const [textInput, setTextInput] = useState('')
-  const [selectedLLMId, setSelectedLLMId] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('voice_agent_selected_model')
-      if (saved && LLM_OPTIONS.some(o => o.id === saved)) {
-        return saved
-      }
-    }
-    return DEFAULT_LLM_ID
-  })
-  const [hasUserSelected, setHasUserSelected] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('voice_agent_selected_model') !== null
-    }
-    return false
-  })
+  const [selectedLLMId, setSelectedLLMId] = useState<string>(() => loadPreferences().llmId || DEFAULT_LLM_ID)
   const [pendingImage, setPendingImage] = useState<string | null>(null)
   const [showDebugPanel, setShowDebugPanel] = useState(false)
   const [sttLoadProgress, setSttLoadProgress] = useState(0)
@@ -109,8 +105,10 @@ export default function App() {
   const abortControllerRef = useRef<AbortController | null>(null)  // For cancelling LLM requests
   const pendingUserInputRef = useRef<string | null>(null)  // Queue user input during processing
 
-  // WebGPU TTS
   const tts = useTTS({
+    engine: prefs.ttsEngine,
+    voice: prefs.ttsVoice,
+    language: prefs.ttsLanguage,
     onStatusChange: (ttsStatus) => {
       if (ttsStatus === "speaking") {
         setStatus("speaking")
@@ -155,6 +153,7 @@ export default function App() {
   const gemma4Ref = useRef(gemma4)
   const webllmRef = useRef(webllm)
   const selectedLLMIdRef = useRef(selectedLLMId)
+  const prefsRef = useRef(prefs)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const voiceMenuRef = useRef<HTMLDivElement | null>(null)
   const langMenuRef = useRef<HTMLDivElement | null>(null)
@@ -207,7 +206,8 @@ export default function App() {
     gemma4Ref.current = gemma4
     webllmRef.current = webllm
     selectedLLMIdRef.current = selectedLLMId
-  }, [gemma4, webllm, selectedLLMId])
+    prefsRef.current = prefs
+  }, [gemma4, webllm, selectedLLMId, prefs])
 
   const selectedOption = LLM_OPTIONS.find(o => o.id === selectedLLMId) || LLM_OPTIONS[0]
   const llmLoadProgress = selectedOption.backend === 'gemma4' ? gemma4.loadProgress : webllm.loadProgress
@@ -256,9 +256,17 @@ export default function App() {
             setSttLoadProgress(100)
             setDebugInfo(prev => ({ ...prev, vadLoaded: true, sttLoaded: true }))
             
-            // STT ready, now load TTS
-            setStatusMessage("Loading Supertonic 3 TTS (~400MB)...")
-            await tts.loadModels()
+            const ttsPrefs = prefsRef.current
+            const ttsEngineLabel = TTS_ENGINE_OPTIONS.find((o) => o.id === ttsPrefs.ttsEngine)?.name ?? "TTS"
+            const ttsSize =
+              ttsPrefs.ttsEngine === "supertonic"
+                ? "~400MB"
+                : PIPER_VOICES.find((v) => v.id === ttsPrefs.ttsVoice)?.sizeLabel ?? "~60MB"
+            setStatusMessage(`Loading ${ttsEngineLabel} TTS (${ttsSize})...`)
+            await tts.loadModels({
+              engine: ttsPrefs.ttsEngine,
+              voice: ttsPrefs.ttsVoice,
+            })
             setDebugInfo(prev => ({ ...prev, ttsLoaded: true }))
             
             // Load LLM based on selected registry option
@@ -290,6 +298,7 @@ export default function App() {
 
             setDebugInfo(prev => ({ ...prev, llmLoaded: true, llmMode: selectedId }))
             
+            setSetupPhase("ready")
             setStatus("ready")
             setStatusMessage("Ready! Click 'Start Call' to begin.")
             console.log("[Voice] Ready - STT, TTS, LLM loaded")
@@ -363,13 +372,17 @@ export default function App() {
     workerRef.current?.postMessage({ type: "init" })
   }, [initWorker])
 
-  const selectAndInitialize = useCallback((modelId: string) => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('voice_agent_selected_model', modelId)
+  const handleSetupStart = useCallback((selection: SetupSelection) => {
+    const newPrefs: UserPreferences = {
+      ...selection,
+      configured: true,
     }
-    setSelectedLLMId(modelId)
-    selectedLLMIdRef.current = modelId
-    setHasUserSelected(true)
+    savePreferences(newPrefs)
+    setPrefs(newPrefs)
+    prefsRef.current = newPrefs
+    setSelectedLLMId(selection.llmId)
+    selectedLLMIdRef.current = selection.llmId
+    setSetupPhase('loading')
     loadModels()
   }, [loadModels])
 
@@ -378,10 +391,7 @@ export default function App() {
 
     setSelectedLLMId(newModelId)
     selectedLLMIdRef.current = newModelId
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('voice_agent_selected_model', newModelId)
-    }
-    setHasUserSelected(true)
+    savePreferences({ ...prefsRef.current, llmId: newModelId, configured: true })
 
     if (!debugInfo.llmLoaded && status !== 'ready' && status !== 'error') {
       return
@@ -640,7 +650,48 @@ export default function App() {
     setStatusMessage("Ready! Click mic to start a new call.")
   }
 
-  // Check WebGPU support and conditionally auto-initialize on mount
+  const handleResetPreferences = useCallback(async () => {
+    abortControllerRef.current?.abort()
+    isProcessingRef.current = false
+
+    if (isCallActiveRef.current) {
+      setIsCallActive(false)
+      stopListening()
+    }
+
+    tts.stop()
+    await tts.reset()
+
+    workerRef.current?.terminate()
+    workerRef.current = null
+
+    await gemma4Ref.current.unload()
+    await webllmRef.current.unload()
+
+    clearPreferences()
+    const resetPrefs = { ...DEFAULT_PREFERENCES }
+    setPrefs(resetPrefs)
+    prefsRef.current = resetPrefs
+    setSelectedLLMId(DEFAULT_LLM_ID)
+    selectedLLMIdRef.current = DEFAULT_LLM_ID
+    setSetupPhase('selecting')
+    setStatus('idle')
+    setStatusMessage('Choose your models to begin')
+    setSttLoadProgress(0)
+    setDebugInfo((prev) => ({
+      webgpu: prev.webgpu,
+      sttBackend: 'unknown',
+      llmMode: DEFAULT_LLM_ID,
+      vadLoaded: false,
+      sttLoaded: false,
+      ttsLoaded: false,
+      llmLoaded: false,
+    }))
+    setMessages([])
+    setPendingImage(null)
+  }, [tts])
+
+  // Check WebGPU support on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       const secure = window.location.protocol === "https:" ||
@@ -666,14 +717,6 @@ export default function App() {
       }
     }
     checkWebGPU()
-    
-    const saved = typeof window !== 'undefined' ? localStorage.getItem('voice_agent_selected_model') : null
-    if (saved) {
-      console.log("[Voice] Auto-initializing with saved model:", saved)
-      loadModels()
-    } else {
-      console.log("[Voice] Waiting for model selection...")
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -690,18 +733,10 @@ export default function App() {
   const waveformActive = status === "listening" || status === "recording"
   const waveformProcessing = status === "speaking" || status === "thinking" || status === "transcribing"
 
-  const voices: { id: TTSVoice; name: string; desc: string }[] = [
-    { id: "F1", name: "Female 1", desc: "Calm, steady" },
-    { id: "F2", name: "Female 2", desc: "Bright, cheerful" },
-    { id: "F3", name: "Female 3", desc: "Professional" },
-    { id: "F4", name: "Female 4", desc: "Confident" },
-    { id: "F5", name: "Female 5", desc: "Gentle" },
-    { id: "M1", name: "Male 1", desc: "Lively, upbeat" },
-    { id: "M2", name: "Male 2", desc: "Deep, calm" },
-    { id: "M3", name: "Male 3", desc: "Authoritative" },
-    { id: "M4", name: "Male 4", desc: "Soft, friendly" },
-    { id: "M5", name: "Male 5", desc: "Warm" },
-  ]
+  const voiceOptions =
+    prefs.ttsEngine === "supertonic"
+      ? SUPERTRONIC_VOICES
+      : PIPER_VOICES.map((v) => ({ id: v.id, name: v.name, desc: v.desc }))
 
   const languages: { id: TTSLanguage; label: string }[] = [
     { id: "auto", label: "Auto" },
@@ -771,98 +806,50 @@ export default function App() {
         <ConversationContent className={cn("max-w-2xl mx-auto", messages.length === 0 ? "min-h-full flex flex-col justify-center" : "pt-16")}>
           {messages.length === 0 ? (
             <div className="text-center py-10 max-w-xl mx-auto w-full">
-              <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-red-500">WebVoice</h1>
-              <p className="text-zinc-400 text-sm mb-8">100% in-browser LLM, VAD, STT, and TTS — nothing leaves your device</p>
-
-              {status === 'idle' && !hasUserSelected ? (
-                <div className="text-left space-y-4">
-                  <div className="text-zinc-300 text-sm font-semibold mb-2 text-center">
-                    Choose a model to initialize the voice agent:
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[420px] overflow-y-auto pr-1">
-                    {LLM_OPTIONS.map((opt) => {
-                      const isRecommended = opt.id === DEFAULT_LLM_ID
-                      const sizeInGB = parseFloat(opt.sizeLabel.replace(/[~ GB]/g, ''))
-                      const isHeavyForMobile = isMobile && sizeInGB >= 1.5
-                      return (
-                        <button
-                          key={opt.id}
-                          onClick={() => selectAndInitialize(opt.id)}
-                          className={cn(
-                            'flex flex-col justify-between p-3 rounded-xl border text-left transition-all duration-200 hover:scale-[1.01]',
-                            isRecommended
-                              ? 'bg-purple-950/20 border-purple-500/50 hover:bg-purple-950/30 shadow-md shadow-purple-500/5 sm:col-span-2'
-                              : 'bg-zinc-900/50 border-zinc-800 hover:bg-zinc-900 hover:border-zinc-700'
-                          )}
-                        >
-                          <div className="w-full">
-                            <div className="flex items-center justify-between gap-2 mb-1.5">
-                              <span className="font-semibold text-white text-sm">{opt.name}</span>
-                              <div className="flex items-center gap-1">
-                                {isRecommended && (
-                                  <span className="bg-purple-500/20 text-purple-300 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-purple-500/30">
-                                    Rec
-                                  </span>
-                                )}
-                                {opt.supportsVision && (
-                                  <span className="bg-green-500/10 text-green-400 text-[9px] font-medium px-1.5 py-0.5 rounded-full border border-green-500/20">
-                                    Vision
-                                  </span>
-                                )}
-                                {isHeavyForMobile && (
-                                  <span className="bg-red-500/20 text-red-300 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-red-500/30">
-                                    May Crash Mobile
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <p className="text-[11px] text-zinc-400 leading-normal line-clamp-1 mb-2">
-                              {opt.backend === 'gemma4'
-                                ? 'Multimodal WebGPU model with vision capabilities.'
-                                : 'Browser optimized text-only WebLLM model.'}
-                            </p>
-                          </div>
-                          <div className="flex items-center justify-between w-full pt-1.5 border-t border-zinc-800/50 mt-auto">
-                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{opt.backend}</span>
-                            <span className="text-[11px] font-bold text-zinc-300">{opt.sizeLabel}</span>
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
+              {setupPhase === 'selecting' ? (
+                <SetupScreen
+                  initial={{
+                    llmId: prefs.llmId,
+                    ttsEngine: prefs.ttsEngine,
+                    ttsVoice: prefs.ttsVoice,
+                    ttsLanguage: prefs.ttsLanguage,
+                  }}
+                  isMobile={isMobile}
+                  hasSavedConfig={prefs.configured}
+                  onStart={handleSetupStart}
+                  onReset={prefs.configured ? handleResetPreferences : undefined}
+                />
               ) : (
                 <>
+                  <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-red-500">WebVoice</h1>
                   <p className="text-zinc-500">
-                      {status === 'idle'
-                        ? 'Click Initialize to load the voice models'
-                        : status === 'loading'
-                          ? statusMessage
-                          : isCallActive 
-                            ? 'Start speaking...'
-                            : 'Click the phone to start a call'}
-                    </p>
-                    {status === 'loading' && activeLoadProgress && (
-                      <div className="mt-4 w-64 mx-auto">
-                        <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
-                          {activeLoadProgress.progress > 0 ? (
-                            <div
-                              className={`h-full ${activeLoadProgress.color} transition-all duration-300`}
-                              style={{ width: `${activeLoadProgress.progress}%` }}
-                            />
-                          ) : (
-                            <div className={`h-full ${activeLoadProgress.color} w-1/3 animate-pulse`} />
-                          )}
-                        </div>
-                        <p className="text-xs text-zinc-600 mt-1">
-                          {activeLoadProgress.label}:{' '}
-                          {activeLoadProgress.progress > 0
-                            ? `${Math.round(activeLoadProgress.progress)}%`
-                            : 'starting...'}
-                        </p>
+                    {setupPhase === 'loading'
+                      ? statusMessage
+                      : isCallActive
+                        ? 'Start speaking...'
+                        : "Click the phone to start a call"}
+                  </p>
+                  {setupPhase === 'loading' && activeLoadProgress && (
+                    <div className="mt-4 w-64 mx-auto">
+                      <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                        {activeLoadProgress.progress > 0 ? (
+                          <div
+                            className={`h-full ${activeLoadProgress.color} transition-all duration-300`}
+                            style={{ width: `${activeLoadProgress.progress}%` }}
+                          />
+                        ) : (
+                          <div className={`h-full ${activeLoadProgress.color} w-1/3 animate-pulse`} />
+                        )}
                       </div>
-                    )}
-                  </>
+                      <p className="text-xs text-zinc-600 mt-1">
+                        {activeLoadProgress.label}:{' '}
+                        {activeLoadProgress.progress > 0
+                          ? `${Math.round(activeLoadProgress.progress)}%`
+                          : 'starting...'}
+                      </p>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           ) : (
@@ -903,13 +890,26 @@ export default function App() {
           </div>
           <div className="space-y-1 text-zinc-300">
             <div>WebGPU: <span className={debugInfo.webgpu === "available" ? "text-green-400" : "text-yellow-400"}>{debugInfo.webgpu}</span></div>
+            <div>COI: <span className={isCrossOriginIsolated() ? "text-green-400" : "text-yellow-400"}>{isCrossOriginIsolated() ? "yes (WASM threads)" : "no (single-thread WASM)"}</span></div>
             <div>iOS: <span className={isIOS ? "text-yellow-400" : "text-green-400"}>{isIOS ? "yes" : "no"}</span></div>
             <div>LLM ID: <span className="text-blue-400">{selectedLLMId}</span></div>
             <hr className="border-zinc-700 my-2" />
             <div>VAD: {debugInfo.vadLoaded ? <span className="text-green-400">✓</span> : <span className="text-zinc-500">○</span>}</div>
             <div>STT: {debugInfo.sttLoaded ? <span className="text-green-400">✓</span> : <span className="text-zinc-500">○</span>}</div>
             <div>TTS: {debugInfo.ttsLoaded ? <span className="text-green-400">✓</span> : <span className="text-zinc-500">○</span>} {tts.backend && <span className="text-zinc-500">({tts.backend})</span>}</div>
+            <div>TTS engine: <span className="text-blue-400">{prefs.ttsEngine}</span></div>
+            <div>TTS voice: <span className="text-blue-400">{prefs.ttsVoice}</span></div>
             <div>LLM: {debugInfo.llmLoaded ? <span className="text-green-400">✓</span> : <span className="text-zinc-500">○</span>}</div>
+            {setupPhase === 'ready' && (
+              <button
+                type="button"
+                onClick={() => void handleResetPreferences()}
+                className="mt-3 w-full text-left px-2 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center gap-2"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Reset model choices
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -940,6 +940,7 @@ export default function App() {
       </div>
 
       {/* Fixed bottom bar */}
+      {setupPhase !== 'selecting' && (
       <div className="fixed bottom-0 left-0 right-0 p-4">
         <div className="max-w-2xl mx-auto">
           <div className="bg-zinc-800/95 backdrop-blur-xl rounded-2xl border border-zinc-700/50 p-3 shadow-2xl">
@@ -1068,11 +1069,9 @@ export default function App() {
                       value={textInput}
                       onChange={(e) => setTextInput(e.target.value)}
                       placeholder={
-                        status === "idle"
-                          ? "Initialize to start..."
-                          : status === "loading" || status === "error"
-                            ? statusMessage
-                            : "How can I help?"
+                        setupPhase !== "ready"
+                          ? "Loading models..."
+                          : "How can I help?"
                       }
                       disabled={status !== "ready"}
                         className="flex-1 bg-transparent text-zinc-200 text-sm outline-none placeholder:text-zinc-500 disabled:text-zinc-500"
@@ -1080,7 +1079,7 @@ export default function App() {
                     </form>
 
                     {/* Call Start button */}
-                    {status !== "loading" && status !== "idle" && (
+                    {setupPhase === "ready" && status !== "loading" && (
                       <Button
                         onClick={startCall}
                         size="icon"
@@ -1144,7 +1143,7 @@ export default function App() {
                         )}
                       </div>
 
-                      {/* Language Dropdown */}
+                      {prefs.ttsEngine === "supertonic" && (
                       <div className="relative" ref={langMenuRef}>
                         <Button
                           variant="ghost"
@@ -1173,6 +1172,7 @@ export default function App() {
                           </div>
                         )}
                       </div>
+                      )}
 
                       {/* Voice Dropdown */}
                       <div className="relative" ref={voiceMenuRef}>
@@ -1187,7 +1187,7 @@ export default function App() {
                         </Button>
                         {showVoiceMenu && (
                           <div className="absolute bottom-full mb-2 left-0 bg-zinc-850 border border-zinc-700 rounded-lg shadow-xl p-2 min-w-[140px] z-20">
-                            {voices.map((voice) => (
+                            {voiceOptions.map((voice) => (
                               <button
                                 key={voice.id}
                                 onClick={() => {
@@ -1222,6 +1222,7 @@ export default function App() {
           </div>
         </div>
       </div>
+      )}
     </div>
   )
 }
