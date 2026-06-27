@@ -25,6 +25,10 @@ type Gemma4Processor = {
     tokens: unknown,
     options: { skip_special_tokens: boolean },
   ) => string[]
+  tokenizer: {
+    decode: (tokens: bigint[], options: Record<string, unknown>) => string
+    all_special_ids: number[]
+  }
   (text: string, images?: any, audio?: null, options?: { add_special_tokens?: boolean }): Promise<Record<string, unknown>>
 }
 
@@ -68,6 +72,43 @@ async function loadTransformers() {
   }
 
   return { AutoProcessor, Gemma4ForConditionalGeneration }
+}
+
+function formatGemma4Messages(
+  messages: ChatMessage[],
+  systemPrompt?: string,
+  imageDataUrl?: string,
+) {
+  let lastUserIndex = -1
+  for (let i = messages.length - 1; i >= 0; --i) {
+    if (messages[i].role === 'user') {
+      lastUserIndex = i
+      break
+    }
+  }
+
+  const formattedMessages = messages.map((m, index) => {
+    const isLastUser = index === lastUserIndex
+    if (isLastUser && imageDataUrl) {
+      return {
+        role: m.role,
+        content: [
+          { type: 'image' as const },
+          { type: 'text' as const, text: m.content as string },
+        ],
+      }
+    }
+    return {
+      role: m.role,
+      content: m.content,
+    }
+  })
+
+  const chatMessages = systemPrompt
+    ? [{ role: 'system' as const, content: systemPrompt }, ...formattedMessages]
+    : formattedMessages
+
+  return chatMessages
 }
 
 export function useGemma4(options: UseGemma4Options = {}) {
@@ -148,34 +189,7 @@ export function useGemma4(options: UseGemma4Options = {}) {
       abortRef.current = false
 
       try {
-        let lastUserIndex = -1
-        for (let i = messages.length - 1; i >= 0; --i) {
-          if (messages[i].role === 'user') {
-            lastUserIndex = i
-            break
-          }
-        }
-
-        const formattedMessages = messages.map((m, index) => {
-          const isLastUser = index === lastUserIndex
-          if (isLastUser && imageDataUrl) {
-            return {
-              role: m.role,
-              content: [
-                { type: 'image' as const },
-                { type: 'text' as const, text: m.content as string }
-              ]
-            }
-          }
-          return {
-            role: m.role,
-            content: m.content
-          }
-        })
-
-        const chatMessages = systemPrompt
-          ? [{ role: 'system' as const, content: systemPrompt }, ...formattedMessages]
-          : formattedMessages
+        const chatMessages = formatGemma4Messages(messages, systemPrompt, imageDataUrl)
 
         const prompt = processor.apply_chat_template(chatMessages as any, {
           enable_thinking: false,
@@ -236,6 +250,123 @@ export function useGemma4(options: UseGemma4Options = {}) {
     [updateStatus],
   )
 
+  const chatStream = useCallback(async function* (
+    messages: ChatMessage[],
+    systemPrompt?: string,
+    imageDataUrl?: string,
+  ): AsyncGenerator<string, void, unknown> {
+    const processor = processorRef.current
+    const model = modelRef.current
+
+    if (!processor || !model) {
+      throw new Error('Gemma 4 not loaded')
+    }
+
+    updateStatus('generating')
+    abortRef.current = false
+
+    try {
+      const chatMessages = formatGemma4Messages(messages, systemPrompt, imageDataUrl)
+
+      const prompt = processor.apply_chat_template(chatMessages as any, {
+        enable_thinking: false,
+        add_generation_prompt: true,
+        tokenize: false,
+      })
+
+      const { RawImage, TextStreamer } = await import('@huggingface/transformers')
+      const image = imageDataUrl
+        ? await RawImage.fromURL(imageDataUrl)
+        : null
+
+      const inputs = await processor(prompt, image, null, { add_special_tokens: false })
+
+      if (abortRef.current) {
+        updateStatus('ready')
+        return
+      }
+
+      let rawStream = ''
+      let previousCleaned = ''
+      const queue: string[] = []
+      let streamDone = false
+      let streamError: unknown = null
+      let notify: (() => void) | null = null
+
+      const streamer = new TextStreamer(processor.tokenizer as never, {
+        skip_prompt: true,
+        skip_special_tokens: false,
+        callback_function: (text: string) => {
+          if (abortRef.current) return
+          rawStream += text
+          const cleaned = extractGemma4Response(rawStream)
+          const delta = cleaned.slice(previousCleaned.length)
+          previousCleaned = cleaned
+          if (delta) {
+            queue.push(delta)
+            notify?.()
+            notify = null
+          }
+        },
+      })
+
+      const generatePromise = model
+        .generate({
+          ...inputs,
+          max_new_tokens: 128,
+          do_sample: false,
+          streamer,
+        })
+        .then(() => {
+          streamDone = true
+          updateStatus('ready')
+          notify?.()
+          notify = null
+        })
+        .catch((error) => {
+          streamError = error
+          streamDone = true
+          notify?.()
+          notify = null
+        })
+
+      while (!streamDone || queue.length > 0) {
+        if (abortRef.current) break
+
+        if (queue.length > 0) {
+          yield queue.shift()!
+          continue
+        }
+
+        if (streamError) {
+          throw streamError
+        }
+
+        await new Promise<void>((resolve) => {
+          notify = resolve
+        })
+      }
+
+      await generatePromise
+
+      if (abortRef.current) {
+        return
+      }
+
+      if (!previousCleaned.trim()) {
+        throw new Error('Gemma 4 returned an empty response')
+      }
+    } catch (error) {
+      if (abortRef.current) {
+        updateStatus('ready')
+        return
+      }
+      console.error('[Gemma4] Stream error:', error)
+      updateStatus('error')
+      throw error
+    }
+  }, [updateStatus])
+
   const abort = useCallback(() => {
     abortRef.current = true
   }, [])
@@ -257,6 +388,7 @@ export function useGemma4(options: UseGemma4Options = {}) {
     isGenerating: status === "generating",
     loadModel,
     chat,
+    chatStream,
     abort,
     unload,
   }

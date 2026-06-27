@@ -210,60 +210,22 @@ export function useVoiceAgent() {
         const option =
           LLM_OPTIONS.find((o) => o.id === selectedLLMIdRef.current) || LLM_OPTIONS[0]
 
-        if (option.backend === 'gemma4') {
-          const currentGemma4 = gemma4Ref.current
-          if (!currentGemma4.isReady) {
-            throw new Error(
-              'Gemma 4 is not loaded — reload the page or switch model in the dropdown'
-            )
-          }
-          console.debug(
-            `[Voice] Using Gemma 4 E2B, history: ${recentHistory.length}/${conversationHistory.length}`
-          )
-
-          const lastUserMsg = [...recentHistory].reverse().find((m) => m.role === 'user')
-          const lastUserImage = lastUserMsg?.image
-
-          assistantMessage = await currentGemma4.chat(chatMessages, systemPrompt, lastUserImage)
-          setMessages((prev) => {
-            const copy = [...prev]
-            if (copy.length > 0 && copy[copy.length - 1].role === 'assistant') {
-              copy[copy.length - 1] = { ...copy[copy.length - 1], content: assistantMessage }
-            }
-            return copy
-          })
-
-          if (!assistantMessage.trim()) {
-            throw new Error('LLM returned an empty response')
-          }
-
-          const result = await tts.synthesize(assistantMessage)
-          const wavBytes = pcmToWav(result.audio, result.sampling_rate)
-          const blob = new Blob([wavBytes], { type: 'audio/wav' })
-          const url = URL.createObjectURL(blob)
-
-          setMessages((prev) => {
-            const copy = [...prev]
-            if (copy.length > 0 && copy[copy.length - 1].role === 'assistant') {
-              copy[copy.length - 1] = { ...copy[copy.length - 1], audioUrl: url }
-            }
-            return copy
-          })
-          console.log('[LLM]', assistantMessage)
-
-          await tts.playPCM(result.audio, result.sampling_rate)
-        } else {
-          const currentWebllm = webllmRef.current
-          if (!currentWebllm.isReady) {
-            throw new Error('LLM not ready')
-          }
-          console.debug(
-            `[Voice] Using WebLLM (${option.name}), history: ${recentHistory.length}/${conversationHistory.length}`
-          )
-
+        const streamLLMWithSentenceTTS = async (
+          llmStream: AsyncGenerator<string, void, unknown>,
+        ) => {
           const splitter = new TextSplitterStream()
           const pcmChunks: Float32Array[] = []
           let samplingRate = 22050
+
+          const updateAssistantMessage = (content: string) => {
+            setMessages((prev) => {
+              const copy = [...prev]
+              if (copy.length > 0 && copy[copy.length - 1].role === 'assistant') {
+                copy[copy.length - 1] = { ...copy[copy.length - 1], content }
+              }
+              return copy
+            })
+          }
 
           const ttsTask = (async () => {
             for await (const sentence of splitter) {
@@ -278,26 +240,19 @@ export function useVoiceAgent() {
               setMessages((prev) => {
                 const copy = [...prev]
                 const last = copy[copy.length - 1]
-                if (last?.role === "assistant") {
+                if (last?.role === 'assistant') {
                   if (last.audioUrl) URL.revokeObjectURL(last.audioUrl)
-                  copy[copy.length - 1] = { ...last, audioUrl: url }
+                  copy[copy.length - 1] = { ...last, audioUrl: url, content: assistantMessage }
                 }
                 return copy
               })
             }
           })()
 
-          const generator = currentWebllm.chatStream(chatMessages, systemPrompt)
-          for await (const delta of generator) {
+          for await (const delta of llmStream) {
             assistantMessage += delta
             splitter.push(delta)
-            setMessages((prev) => {
-              const copy = [...prev]
-              if (copy.length > 0 && copy[copy.length - 1].role === 'assistant') {
-                copy[copy.length - 1] = { ...copy[copy.length - 1], content: assistantMessage }
-              }
-              return copy
-            })
+            updateAssistantMessage(assistantMessage)
           }
           splitter.close()
 
@@ -308,6 +263,37 @@ export function useVoiceAgent() {
           await ttsTask
           await tts.waitUntilDone()
           console.log('[LLM]', assistantMessage)
+        }
+
+        if (option.backend === 'gemma4') {
+          const currentGemma4 = gemma4Ref.current
+          if (!currentGemma4.isReady) {
+            throw new Error(
+              'Gemma 4 is not loaded — reload the page or switch model in the dropdown'
+            )
+          }
+          console.debug(
+            `[Voice] Using Gemma 4 E2B, history: ${recentHistory.length}/${conversationHistory.length}`
+          )
+
+          const lastUserMsg = [...recentHistory].reverse().find((m) => m.role === 'user')
+          const lastUserImage = lastUserMsg?.image
+
+          await streamLLMWithSentenceTTS(
+            currentGemma4.chatStream(chatMessages, systemPrompt, lastUserImage),
+          )
+        } else {
+          const currentWebllm = webllmRef.current
+          if (!currentWebllm.isReady) {
+            throw new Error('LLM not ready')
+          }
+          console.debug(
+            `[Voice] Using WebLLM (${option.name}), history: ${recentHistory.length}/${conversationHistory.length}`
+          )
+
+          await streamLLMWithSentenceTTS(
+            currentWebllm.chatStream(chatMessages, systemPrompt),
+          )
         }
       } catch (error) {
         setMessages((prev) => {
