@@ -61,7 +61,6 @@ async function getDevice() {
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
   
   if (isIOS) {
-    console.debug("[STT Worker] iOS detected, using WASM for stability")
     return "wasm"
   }
   
@@ -69,68 +68,94 @@ async function getDevice() {
     try {
       const adapter = await navigator.gpu.requestAdapter()
       if (adapter) {
-        console.debug("[STT Worker] WebGPU available")
         return "webgpu"
       }
     } catch (e) {
-      console.debug("[STT Worker] WebGPU check failed:", e)
     }
   }
-  console.debug("[STT Worker] Falling back to WASM")
   return "wasm"
 }
 
 let selectedDevice = null
 
-console.debug("[STT Worker ESM] Loaded, AutoModel:", !!AutoModel)
+
+// ============ Progress Tracking ============
+const fileProgressMap = new Map()
+
+function reportProgress(progress, prefix) {
+  if (progress.status === "progress" && progress.file) {
+    fileProgressMap.set(progress.file, {
+      loaded: progress.loaded || 0,
+      total: progress.total || 0,
+    })
+
+    let totalLoaded = 0
+    let totalSize = 0
+    for (const item of fileProgressMap.values()) {
+      totalLoaded += item.loaded
+      totalSize += item.total
+    }
+
+    if (totalSize > 0) {
+      const percentage = Math.round((totalLoaded / totalSize) * 100)
+      self.postMessage({
+        type: "progress",
+        progress: Math.min(99, percentage),
+        message: `${prefix}: downloading ${progress.file}...`,
+      })
+    }
+  } else if (progress.status === "download" && progress.file) {
+    self.postMessage({
+      type: "progress",
+      message: `${prefix}: initiating ${progress.file}...`,
+    })
+  } else if (progress.status === "done" && progress.file) {
+    const item = fileProgressMap.get(progress.file)
+    if (item) {
+      item.loaded = item.total
+      fileProgressMap.set(progress.file, item)
+    }
+  }
+}
 
 // ============ Model Loading ============
 async function loadModels() {
-  console.debug("[STT Worker] Starting model load...")
+  if (sileroVad && transcriber) {
+    self.postMessage({ type: "status", status: "ready", message: "Models loaded!" })
+    return
+  }
   
   // Detect best available device
   selectedDevice = await getDevice()
-  console.debug("[STT Worker] Using device:", selectedDevice)
   
+  fileProgressMap.clear()
   self.postMessage({ type: "status", status: "loading", message: `Loading VAD model (${selectedDevice})...` })
 
   // Load Silero VAD from onnx-community (public, no auth required)
-  console.debug("[STT Worker] Loading Silero VAD...")
   sileroVad = await AutoModel.from_pretrained("onnx-community/silero-vad", {
     config: { model_type: "custom" },
     dtype: "fp32",
     device: selectedDevice,
-    progress_callback: (progress) => {
-      if (progress.progress !== undefined) {
-        self.postMessage({ type: "progress", progress: progress.progress, message: `VAD: ${progress.status}` })
-      }
-    },
+    progress_callback: (progress) => reportProgress(progress, "VAD"),
   })
-  console.debug("[STT Worker] VAD loaded!")
 
   // Init VAD tensors
   vadSr = new Tensor("int64", [INPUT_SAMPLE_RATE], [])
   vadState = new Tensor("float32", new Float32Array(2 * 1 * 128), [2, 1, 128])
 
+  fileProgressMap.clear()
   self.postMessage({ type: "status", status: "loading", message: "Loading Whisper model..." })
 
   // Load Whisper from onnx-community (public, no auth required)
-  console.debug("[STT Worker] Loading Whisper base...")
   // TODO: Add whisper-tiny-en to R2 for mobile
   const whisperModel = "onnx-community/whisper-base"
-  console.debug("[STT Worker] Using Whisper model:", whisperModel)
   
   try {
     transcriber = await pipeline("automatic-speech-recognition", whisperModel, {
       dtype: "fp32",
       device: selectedDevice,
-      progress_callback: (progress) => {
-        if (progress.progress !== undefined) {
-          self.postMessage({ type: "progress", progress: progress.progress, message: `Whisper: ${progress.status}` })
-        }
-      },
+      progress_callback: (progress) => reportProgress(progress, "Whisper"),
     })
-    console.debug("[STT Worker] Whisper loaded!")
   } catch (e) {
     console.error("[STT Worker] Whisper load failed:", e)
     self.postMessage({ type: "error", message: `Whisper failed: ${e.message}` })
@@ -139,9 +164,7 @@ async function loadModels() {
 
   // Warm up
   try {
-    console.debug("[STT Worker] Warming up Whisper...")
     await transcriber(new Float32Array(INPUT_SAMPLE_RATE))
-    console.debug("[STT Worker] Warmup complete!")
   } catch (e) {
     console.error("[STT Worker] Warmup failed:", e)
     self.postMessage({ type: "error", message: `Warmup failed: ${e.message}` })
@@ -299,6 +322,19 @@ self.onmessage = async (event) => {
     case "audio":
       if (sileroVad && vadState) {
         queueAudio(buffer)
+      }
+      break
+
+    case "transcribe_buffer":
+      if (!transcriber) {
+        self.postMessage({ type: "error", message: "Whisper model not loaded yet" })
+        break
+      }
+      try {
+        const text = await transcribe(buffer)
+        self.postMessage({ type: "transcript_full_result", text })
+      } catch (err) {
+        self.postMessage({ type: "error", message: err.toString() })
       }
       break
 

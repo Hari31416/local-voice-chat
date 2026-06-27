@@ -13,8 +13,9 @@ import {
   type TTSVoice,
 } from "@/lib/tts"
 import { getDefaultVoiceForEngine } from "@/lib/tts-voices"
+import type { SynthesisResult } from "@/lib/tts-types"
 
-export type TTSStatus = "idle" | "loading" | "ready" | "speaking" | "error"
+export type TTSStatus = "idle" | "loading" | "ready" | "synthesizing" | "speaking" | "error"
 export type { TTSVoice, TTSLanguage, TTSEngine }
 
 interface UseTTSOptions {
@@ -30,6 +31,7 @@ export function useTTS(options: UseTTSOptions) {
 
   const [status, setStatus] = useState<TTSStatus>("idle")
   const [loadProgress, setLoadProgress] = useState(0)
+  const [synthesisProgress, setSynthesisProgress] = useState(0)
   const [backend, setBackend] = useState<"webgpu" | "wasm" | null>(null)
 
   const readyRef = useRef(false)
@@ -39,6 +41,7 @@ export function useTTS(options: UseTTSOptions) {
   const [muted, setMutedState] = useState(false)
   const [language, setLanguageState] = useState<TTSLanguage>(initialLanguage)
   const [activeVoice, setActiveVoice] = useState(voice)
+  const [activeEngine, setActiveEngine] = useState(engine)
 
   const engineRef = useRef(engine)
   const voiceRef = useRef(voice)
@@ -53,12 +56,15 @@ export function useTTS(options: UseTTSOptions) {
   )
 
   const loadModels = useCallback(async (override?: { engine?: TTSEngine; voice?: string }) => {
-    if (readyRef.current) return
+    if (readyRef.current && (!override || (override.engine === engineRef.current && override.voice === voiceRef.current))) {
+      return
+    }
 
     const activeEngine = override?.engine ?? engineRef.current
     const activeVoice = override?.voice ?? voiceRef.current
     engineRef.current = activeEngine
     voiceRef.current = activeVoice
+    setActiveEngine(activeEngine)
     setActiveVoice(activeVoice)
 
     updateStatus("loading")
@@ -89,7 +95,8 @@ export function useTTS(options: UseTTSOptions) {
         throw new Error("TTS not loaded")
       }
 
-      updateStatus("speaking")
+      setSynthesisProgress(0)
+      updateStatus("synthesizing")
 
       try {
         if (!audioContextRef.current) {
@@ -102,7 +109,13 @@ export function useTTS(options: UseTTSOptions) {
 
         const result = await synthesizeSpeech(engineRef.current, text, voiceRef.current, {
           language: languageRef.current,
+          onProgress: (step, total) => {
+            setSynthesisProgress(Math.round((step / total) * 100))
+          },
         })
+
+        setSynthesisProgress(100)
+        updateStatus("speaking")
 
         console.debug(`[TTS] ${engineRef.current}:`, {
           voice: voiceRef.current,
@@ -137,6 +150,36 @@ export function useTTS(options: UseTTSOptions) {
         console.error("TTS speak error:", error)
         updateStatus("ready")
         onError?.(error as Error)
+      }
+    },
+    [updateStatus, onError],
+  )
+
+  const synthesize = useCallback(
+    async (text: string): Promise<SynthesisResult> => {
+      if (!readyRef.current) {
+        throw new Error("TTS not loaded")
+      }
+
+      setSynthesisProgress(0)
+      updateStatus("synthesizing")
+
+      try {
+        const result = await synthesizeSpeech(engineRef.current, text, voiceRef.current, {
+          language: languageRef.current,
+          onProgress: (step, total) => {
+            setSynthesisProgress(Math.round((step / total) * 100))
+          },
+        })
+
+        setSynthesisProgress(100)
+        updateStatus("ready")
+        return result
+      } catch (error) {
+        console.error("TTS synthesize error:", error)
+        updateStatus("ready")
+        onError?.(error as Error)
+        throw error
       }
     },
     [updateStatus, onError],
@@ -181,11 +224,13 @@ export function useTTS(options: UseTTSOptions) {
     readyRef.current = false
     setBackend(null)
     setLoadProgress(0)
+    setSynthesisProgress(0)
     updateStatus("idle")
   }, [stop, updateStatus])
 
   useEffect(() => {
     engineRef.current = engine
+    setActiveEngine(engine)
   }, [engine])
 
   useEffect(() => {
@@ -207,7 +252,8 @@ export function useTTS(options: UseTTSOptions) {
   return {
     status,
     loadProgress,
-    engine,
+    synthesisProgress,
+    engine: activeEngine,
     voice: activeVoice,
     setVoice: changeVoice,
     language,
@@ -215,12 +261,14 @@ export function useTTS(options: UseTTSOptions) {
     backend,
     loadModels,
     speak,
+    synthesize,
     stop,
     reset,
     muted,
     setMuted,
     isReady: status === "ready",
     isLoading: status === "loading",
+    isSynthesizing: status === "synthesizing",
     isSpeaking: status === "speaking",
   }
 }

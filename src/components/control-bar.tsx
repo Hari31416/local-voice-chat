@@ -133,9 +133,11 @@ export function ControlBar({
                     ? "Recording..."
                     : status === "thinking"
                       ? "Thinking..."
-                      : status === "speaking"
-                        ? "Speaking..."
-                        : "..."}
+                      : status === "synthesizing"
+                        ? `Synthesizing speech (${tts.synthesisProgress}%)...`
+                        : status === "speaking"
+                          ? "Speaking..."
+                          : "..."}
               </div>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex-1 min-w-0 h-10 flex items-center">

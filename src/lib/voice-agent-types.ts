@@ -8,6 +8,7 @@ export type VoiceAgentStatus =
   | "recording"
   | "transcribing"
   | "thinking"
+  | "synthesizing"
   | "speaking"
   | "error"
 
