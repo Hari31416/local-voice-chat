@@ -65,7 +65,7 @@ export function TTSStudio({ tts }: TTSStudioProps) {
   return (
     <div className="max-w-3xl mx-auto w-full px-4 py-8 space-y-6">
       <div className="text-center space-y-2">
-        <h1 className="text-4xl font-extrabold text-white tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-cyan-400 to-teal-400">
+        <h1 className="text-4xl font-extrabold text-white tracking-tight">
           TTS Studio
         </h1>
         <p className="text-zinc-400 text-sm max-w-lg mx-auto">
@@ -181,7 +181,7 @@ export function TTSStudio({ tts }: TTSStudioProps) {
                 </div>
                 <div className="h-2 bg-zinc-900 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 transition-all duration-300"
+                    className="h-full bg-blue-500 transition-all duration-300"
                     style={{ width: `${tts.isLoading ? tts.loadProgress : tts.synthesisProgress}%` }}
                   />
                 </div>
@@ -192,7 +192,7 @@ export function TTSStudio({ tts }: TTSStudioProps) {
               <Button
                 onClick={handleSynthesize}
                 disabled={tts.isSynthesizing || tts.isLoading || !text.trim()}
-                className="flex-1 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-bold py-5 rounded-xl shadow-lg shadow-blue-500/10 flex items-center justify-center gap-2 cursor-pointer"
+                className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-5 rounded-xl shadow border border-blue-700 flex items-center justify-center gap-2 cursor-pointer transition-colors"
               >
                 {tts.isSynthesizing ? (
                   <>

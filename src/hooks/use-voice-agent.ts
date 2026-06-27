@@ -180,64 +180,98 @@ export function useVoiceAgent() {
       setStatusMessage("Thinking...")
 
       try {
+        setMessages((prev) => [...prev, { role: 'assistant', content: '' }])
+
         const MAX_HISTORY = IS_IOS ? 4 : 10
         const recentHistory = conversationHistory.slice(-MAX_HISTORY)
         const chatMessages = recentHistory.map((m) => ({ role: m.role, content: m.content }))
         const lastUserText =
-          [...recentHistory].reverse().find((m) => m.role === "user")?.content ?? ""
+          [...recentHistory].reverse().find((m) => m.role === 'user')?.content ?? ''
         const systemPrompt = buildSystemPrompt(lastUserText)
 
-        let assistantMessage: string
+        let assistantMessage = ''
         const option =
           LLM_OPTIONS.find((o) => o.id === selectedLLMIdRef.current) || LLM_OPTIONS[0]
 
-        if (option.backend === "gemma4") {
+        if (option.backend === 'gemma4') {
           const currentGemma4 = gemma4Ref.current
           if (!currentGemma4.isReady) {
             throw new Error(
-              "Gemma 4 is not loaded — reload the page or switch model in the dropdown",
+              'Gemma 4 is not loaded — reload the page or switch model in the dropdown'
             )
           }
           console.debug(
-            `[Voice] Using Gemma 4 E2B, history: ${recentHistory.length}/${conversationHistory.length}`,
+            `[Voice] Using Gemma 4 E2B, history: ${recentHistory.length}/${conversationHistory.length}`
           )
 
-          const lastUserMsg = [...recentHistory].reverse().find((m) => m.role === "user")
+          const lastUserMsg = [...recentHistory].reverse().find((m) => m.role === 'user')
           const lastUserImage = lastUserMsg?.image
 
           assistantMessage = await currentGemma4.chat(chatMessages, systemPrompt, lastUserImage)
+          setMessages((prev) => {
+            const copy = [...prev]
+            if (copy.length > 0 && copy[copy.length - 1].role === 'assistant') {
+              copy[copy.length - 1] = { ...copy[copy.length - 1], content: assistantMessage }
+            }
+            return copy
+          })
         } else {
           const currentWebllm = webllmRef.current
           if (!currentWebllm.isReady) {
-            throw new Error("LLM not ready")
+            throw new Error('LLM not ready')
           }
           console.debug(
-            `[Voice] Using WebLLM (${option.name}), history: ${recentHistory.length}/${conversationHistory.length}`,
+            `[Voice] Using WebLLM (${option.name}), history: ${recentHistory.length}/${conversationHistory.length}`
           )
-          assistantMessage = await currentWebllm.chat(chatMessages, systemPrompt)
+
+          const generator = currentWebllm.chatStream(chatMessages, systemPrompt)
+          for await (const delta of generator) {
+            assistantMessage += delta
+            setMessages((prev) => {
+              const copy = [...prev]
+              if (copy.length > 0 && copy[copy.length - 1].role === 'assistant') {
+                copy[copy.length - 1] = { ...copy[copy.length - 1], content: assistantMessage }
+              }
+              return copy
+            })
+          }
         }
 
         if (!assistantMessage.trim()) {
-          throw new Error("LLM returned an empty response")
+          throw new Error('LLM returned an empty response')
         }
 
         const result = await tts.synthesize(assistantMessage)
         
         // Encode PCM float32 to WAV
         const wavBytes = pcmToWav(result.audio, result.sampling_rate)
-        const blob = new Blob([wavBytes], { type: "audio/wav" })
+        const blob = new Blob([wavBytes], { type: 'audio/wav' })
         const url = URL.createObjectURL(blob)
 
-        setMessages((prev) => [...prev, { role: "assistant", content: assistantMessage, audioUrl: url }])
-        console.log("[LLM]", assistantMessage)
+        setMessages((prev) => {
+          const copy = [...prev]
+          if (copy.length > 0 && copy[copy.length - 1].role === 'assistant') {
+            copy[copy.length - 1] = { ...copy[copy.length - 1], audioUrl: url }
+          }
+          return copy
+        })
+        console.log('[LLM]', assistantMessage)
 
         await tts.playPCM(result.audio, result.sampling_rate)
       } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") {
-          console.debug("[Voice] Request aborted by user interruption")
+        setMessages((prev) => {
+          const copy = [...prev]
+          if (copy.length > 0 && copy[copy.length - 1].role === 'assistant' && !copy[copy.length - 1].audioUrl) {
+            copy.pop()
+          }
+          return copy
+        })
+
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.debug('[Voice] Request aborted by user interruption')
         } else {
-          console.error("LLM error:", error)
-          setStatus("error")
+          console.error('LLM error:', error)
+          setStatus('error')
           setStatusMessage(error instanceof Error ? error.message : `LLM error: ${error}`)
         }
         if (isCallActiveRef.current) {

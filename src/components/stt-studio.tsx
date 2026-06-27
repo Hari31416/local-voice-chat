@@ -181,7 +181,7 @@ export function STTStudio({
   return (
     <div className="max-w-3xl mx-auto w-full px-4 py-8 space-y-6">
       <div className="text-center space-y-2">
-        <h1 className="text-4xl font-extrabold text-white tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-green-400 via-emerald-400 to-teal-400">
+        <h1 className="text-4xl font-extrabold text-white tracking-tight">
           STT Studio
         </h1>
         <p className="text-zinc-400 text-sm max-w-lg mx-auto">

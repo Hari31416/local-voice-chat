@@ -41,13 +41,19 @@ export function ConversationArea({
     <Conversation className="flex-1 pb-32">
       <ConversationContent
         className={cn(
-          "max-w-2xl mx-auto",
-          messages.length === 0 ? "min-h-full flex flex-col justify-center" : "pt-16",
+          messages.length === 0 ? 'min-h-full flex flex-col justify-center' : 'pt-16',
+          setupPhase === 'selecting' && messages.length === 0 ? 'max-w-3xl' : 'max-w-2xl',
+          'mx-auto w-full'
         )}
       >
         {messages.length === 0 ? (
-          <div className="text-center py-10 max-w-xl mx-auto w-full">
-            {setupPhase === "selecting" ? (
+          <div
+            className={cn(
+              'text-center py-10 mx-auto w-full',
+              setupPhase === 'selecting' ? 'max-w-3xl' : 'max-w-xl'
+            )}
+          >
+            {setupPhase === 'selecting' ? (
               <SetupScreen
                 initial={{
                   llmId: prefs.llmId,
@@ -62,15 +68,15 @@ export function ConversationArea({
               />
             ) : (
               <>
-                <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-red-500">
+                <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight">
                   WebVoice
                 </h1>
                 <p className="text-zinc-500">
-                  {setupPhase === "loading"
+                  {setupPhase === 'loading'
                     ? statusMessage
                     : isCallActive
-                      ? "Start speaking..."
-                      : "Click the phone to start a call"}
+                      ? 'Start speaking...'
+                      : 'Click the phone to start a call'}
                 </p>
                 {setupPhase === "loading" && activeLoadProgress && (
                   <div className="mt-4 w-64 mx-auto">

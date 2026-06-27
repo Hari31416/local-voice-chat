@@ -76,190 +76,178 @@ export function SetupScreen({
   })()
 
   return (
-    <div className="text-left space-y-6 max-w-xl mx-auto w-full">
+    <div className="text-left space-y-5 max-w-3xl mx-auto w-full">
       <div className="text-center">
-        <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-red-500">
+        <h1 className="text-2xl font-bold text-white mb-1.5 tracking-tight">
           WebVoice
         </h1>
-        <p className="text-zinc-400 text-sm">
-          Choose your models before anything downloads — everything runs locally in your browser.
+        <p className="text-zinc-400 text-xs">
+          Select your local models. Everything runs offline in your browser.
         </p>
       </div>
 
-      <section>
-        <h2 className="text-zinc-300 text-sm font-semibold mb-2">Language model</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[280px] overflow-y-auto pr-1">
-          {LLM_OPTIONS.map((opt) => {
-            const isRecommended = opt.id === DEFAULT_LLM_ID
-            const sizeInGB = parseFloat(opt.sizeLabel.replace(/[~ GB]/g, ""))
-            const isHeavyForMobile = isMobile && sizeInGB >= 1.5
-            const selected = llmId === opt.id
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setLlmId(opt.id)}
-                className={cn(
-                  "flex flex-col justify-between p-3 rounded-xl border text-left transition-all duration-200",
-                  selected
-                    ? "bg-purple-950/30 border-purple-500/60 ring-1 ring-purple-500/30"
-                    : "bg-zinc-900/50 border-zinc-800 hover:bg-zinc-900 hover:border-zinc-700",
-                  isRecommended && "sm:col-span-2",
-                )}
-              >
-                <div className="w-full">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="font-semibold text-white text-sm">{opt.name}</span>
-                    <div className="flex items-center gap-1">
-                      {isRecommended && (
-                        <span className="bg-purple-500/20 text-purple-300 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-purple-500/30">
-                          Rec
-                        </span>
-                      )}
-                      {opt.supportsVision && (
-                        <span className="bg-green-500/10 text-green-400 text-[9px] font-medium px-1.5 py-0.5 rounded-full border border-green-500/20">
-                          Vision
-                        </span>
-                      )}
-                      {isHeavyForMobile && (
-                        <span className="bg-red-500/20 text-red-300 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-red-500/30">
-                          Heavy
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <p className="text-[11px] text-zinc-400 leading-normal line-clamp-1">
-                    {opt.backend === "gemma4"
-                      ? "Multimodal WebGPU model with vision."
-                      : "Browser-optimized text-only WebLLM."}
-                  </p>
-                </div>
-                <div className="flex items-center justify-between w-full pt-1.5 border-t border-zinc-800/50 mt-2">
-                  <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{opt.backend}</span>
-                  <span className="text-[11px] font-bold text-zinc-300">{opt.sizeLabel}</span>
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-zinc-300 text-sm font-semibold mb-2">Text-to-speech engine</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {TTS_ENGINE_OPTIONS.map((opt) => {
-            const selected = ttsEngine === opt.id
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => handleEngineChange(opt.id)}
-                className={cn(
-                  "p-3 rounded-xl border text-left transition-all",
-                  selected
-                    ? "bg-blue-950/30 border-blue-500/60 ring-1 ring-blue-500/30"
-                    : "bg-zinc-900/50 border-zinc-800 hover:bg-zinc-900 hover:border-zinc-700",
-                )}
-              >
-                <div className="font-semibold text-white text-sm mb-1">{opt.name}</div>
-                <p className="text-[11px] text-zinc-400 leading-normal mb-2">{opt.desc}</p>
-                <span className="text-[11px] font-bold text-zinc-300">{opt.sizeLabel}</span>
-              </button>
-            )
-          })}
-        </div>
-      </section>
-
-      <section>
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-zinc-300 text-sm font-semibold">TTS voice</h2>
-          {ttsEngine === "supertonic" && (
-            <div className="flex gap-1">
-              {SUPERTRONIC_LANGUAGES.map((lang) => (
+      <div className="grid grid-cols-1 sm:grid-cols-12 gap-5">
+        {/* Left Column: LLM Selection */}
+        <section className="sm:col-span-7 space-y-2.5">
+          <h2 className="text-zinc-300 text-xs font-semibold uppercase tracking-wider">Language model</h2>
+          <div className="space-y-1.5 max-h-[360px] overflow-y-auto pr-1">
+            {LLM_OPTIONS.map((opt) => {
+              const isRecommended = opt.id === DEFAULT_LLM_ID
+              const sizeInGB = parseFloat(opt.sizeLabel.replace(/[~ GB]/g, ''))
+              const isHeavyForMobile = isMobile && sizeInGB >= 1.5
+              const selected = llmId === opt.id
+              return (
                 <button
-                  key={lang.id}
+                  key={opt.id}
                   type="button"
-                  onClick={() => setTtsLanguage(lang.id)}
+                  onClick={() => setLlmId(opt.id)}
                   className={cn(
-                    "text-[10px] px-2 py-0.5 rounded-full border transition-colors",
-                    ttsLanguage === lang.id
-                      ? "bg-zinc-700 border-zinc-600 text-white"
-                      : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300",
+                    'w-full flex items-center justify-between p-2.5 rounded-lg border text-left transition-all duration-150 cursor-pointer',
+                    selected
+                      ? 'bg-zinc-800/80 border-zinc-500 ring-1 ring-zinc-500/25'
+                      : 'bg-zinc-900/40 border-zinc-800 hover:bg-zinc-900/80 hover:border-zinc-700',
                   )}
                 >
-                  {lang.label}
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-white text-xs">{opt.name}</span>
+                      <div className="flex items-center gap-1">
+                        {isRecommended && (
+                          <span className="bg-zinc-800 text-zinc-300 text-[8px] font-bold px-1 py-0.5 rounded border border-zinc-700">
+                            Rec
+                          </span>
+                        )}
+                        {opt.supportsVision && (
+                          <span className="bg-zinc-800 text-zinc-300 text-[8px] font-medium px-1 py-0.5 rounded border border-zinc-700">
+                            Vision
+                          </span>
+                        )}
+                        {isHeavyForMobile && (
+                          <span className="bg-red-955/40 text-red-400 text-[8px] font-bold px-1 py-0.5 rounded border border-red-900/30">
+                            Heavy
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-zinc-500 line-clamp-1">
+                      {opt.backend === 'gemma4'
+                        ? 'Multimodal WebGPU model with vision'
+                        : 'Optimized text-only WebLLM'}
+                    </p>
+                  </div>
+                  <div className="text-[11px] font-bold text-zinc-400">{opt.sizeLabel}</div>
                 </button>
-              ))}
+              )
+            })}
+          </div>
+        </section>
+
+        {/* Right Column: TTS Configuration & Launch */}
+        <div className="sm:col-span-5 space-y-4">
+          <section className="space-y-2">
+            <h2 className="text-zinc-300 text-xs font-semibold uppercase tracking-wider">Text-to-speech engine</h2>
+            <div className="grid grid-cols-2 gap-1 bg-zinc-950 p-0.5 rounded-lg border border-zinc-850">
+              {TTS_ENGINE_OPTIONS.map((opt) => {
+                const selected = ttsEngine === opt.id
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => handleEngineChange(opt.id)}
+                    className={cn(
+                      'py-1 px-2 text-center text-xs font-medium rounded-md transition-all cursor-pointer truncate',
+                      selected
+                        ? 'bg-zinc-800 text-white shadow-sm border border-zinc-700'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    )}
+                  >
+                    {opt.name === 'Supertonic 3' ? 'Supertonic' : opt.name}
+                  </button>
+                )
+              })}
             </div>
-          )}
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[220px] overflow-y-auto pr-1">
-          {voices.map((voice) => {
-            const selected = ttsVoice === voice.id
-            return (
-              <button
-                key={voice.id}
-                type="button"
-                onClick={() => setTtsVoice(voice.id)}
-                className={cn(
-                  "p-3 rounded-xl border text-left transition-all",
-                  selected
-                    ? "bg-blue-950/30 border-blue-500/60 ring-1 ring-blue-500/30"
-                    : "bg-zinc-900/50 border-zinc-800 hover:bg-zinc-900 hover:border-zinc-700",
-                )}
+          </section>
+
+          <div className={cn(
+            'grid gap-3',
+            ttsEngine === 'supertonic' ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'
+          )}>
+            {ttsEngine === 'supertonic' && (
+              <div className="space-y-1.5">
+                <label className="text-zinc-400 text-[10px] uppercase tracking-wider font-semibold">Language</label>
+                <select
+                  value={ttsLanguage}
+                  onChange={(e) => setTtsLanguage(e.target.value as any)}
+                  className="w-full bg-zinc-905 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none cursor-pointer hover:border-zinc-700 focus:border-zinc-600 transition-colors"
+                >
+                  {SUPERTRONIC_LANGUAGES.map((lang) => (
+                    <option key={lang.id} value={lang.id} className="bg-zinc-950 text-white">
+                      {lang.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label className="text-zinc-400 text-[10px] uppercase tracking-wider font-semibold">Voice</label>
+              <select
+                value={ttsVoice}
+                onChange={(e) => setTtsVoice(e.target.value)}
+                className="w-full bg-zinc-905 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none cursor-pointer hover:border-zinc-700 focus:border-zinc-600 transition-colors"
               >
-                <div className="font-medium text-white text-sm">{voice.name}</div>
-                <div className="text-[11px] text-zinc-500">{voice.desc}</div>
-                {"sizeLabel" in voice && (
-                  <div className="text-[10px] text-zinc-600 mt-1">{voice.sizeLabel}</div>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      </section>
+                {voices.map((voice) => (
+                  <option key={voice.id} value={voice.id} className="bg-zinc-950 text-white">
+                    {voice.name} ({voice.desc}){'sizeLabel' in voice ? ` - ${voice.sizeLabel}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-      <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-3 text-[11px] text-zinc-400 space-y-1">
-        <div className="font-semibold text-zinc-300 text-xs mb-1.5">Estimated first-time download</div>
-        <div className="flex justify-between">
-          <span>Speech recognition (Whisper + VAD)</span>
-          <span className="text-zinc-300">{estimatedDownload.stt}</span>
-        </div>
-        <div className="flex justify-between">
-          <span>TTS ({selectedTtsEngine.name})</span>
-          <span className="text-zinc-300">{estimatedDownload.tts}</span>
-        </div>
-        <div className="flex justify-between">
-          <span>LLM ({selectedLlm.name})</span>
-          <span className="text-zinc-300">{estimatedDownload.llm}</span>
-        </div>
-      </div>
+          <div className="bg-zinc-900/60 border border-zinc-850 rounded-lg p-2.5 text-[10px] text-zinc-400 space-y-1">
+            <div className="font-semibold text-zinc-300 text-xs mb-1.5">Estimated download</div>
+            <div className="flex justify-between">
+              <span>Speech recognition</span>
+              <span className="text-zinc-300 font-medium">{estimatedDownload.stt}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>TTS ({selectedTtsEngine.name})</span>
+              <span className="text-zinc-300 font-medium">{estimatedDownload.tts}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>LLM ({selectedLlm.name})</span>
+              <span className="text-zinc-300 font-medium">{estimatedDownload.llm}</span>
+            </div>
+          </div>
 
-      <div className="flex flex-col sm:flex-row gap-2 pt-1">
-        <Button
-          className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-semibold"
-          onClick={() =>
-            onStart({
-              llmId,
-              ttsEngine,
-              ttsVoice,
-              ttsLanguage: ttsEngine === "supertonic" ? ttsLanguage : "auto",
-            })
-          }
-        >
-          {hasSavedConfig ? "Load models & start" : "Load models"}
-        </Button>
-        {hasSavedConfig && onReset && (
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={onReset}
-            className="text-zinc-400 hover:text-zinc-200 gap-2"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Reset choices
-          </Button>
-        )}
+          <div className="flex gap-2">
+            <Button
+              className="flex-1 bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs py-2 h-9 rounded-lg transition-colors cursor-pointer"
+              onClick={() =>
+                onStart({
+                  llmId,
+                  ttsEngine,
+                  ttsVoice,
+                  ttsLanguage: ttsEngine === 'supertonic' ? ttsLanguage : 'auto',
+                })
+              }
+            >
+              {hasSavedConfig ? 'Load & start' : 'Load models'}
+            </Button>
+            {hasSavedConfig && onReset && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={onReset}
+                className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 text-xs px-2.5 h-9 gap-1.5 rounded-lg cursor-pointer"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Reset
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )

@@ -8,7 +8,8 @@ import {
   VolumeX,
   Gauge,
   Download,
-} from "lucide-react"
+  Info,
+} from 'lucide-react'
 import { Button } from "@/components/ui/button"
 
 interface AudioWaveformPlayerProps {
@@ -33,8 +34,9 @@ export function AudioWaveformPlayer({
   const [playbackRate, setPlaybackRate] = useState(1)
   const [volume, setVolume] = useState(1)
   const [isMuted, setIsMuted] = useState(false)
+  const [showInfoPopover, setShowInfoPopover] = useState(false)
 
-  const isChat = variant === "chat"
+  const isChat = variant === 'chat'
 
   // Web Audio refs for local playback
   const localAudioContextRef = useRef<AudioContext | null>(null)
@@ -115,6 +117,14 @@ export function AudioWaveformPlayer({
       }
     }
   }, [])
+
+  // Click outside to close info popover
+  useEffect(() => {
+    if (!showInfoPopover) return
+    const handleClose = () => setShowInfoPopover(false)
+    document.addEventListener('click', handleClose)
+    return () => document.removeEventListener('click', handleClose)
+  }, [showInfoPopover])
 
   // Dynamic canvas drawing loop (Dot-Matrix LED Visualizer)
   useEffect(() => {
@@ -342,7 +352,7 @@ export function AudioWaveformPlayer({
           onClick={togglePlay}
           disabled={isGlobalPlaying}
           size="icon"
-          className="h-8 w-8 rounded-full bg-blue-600/90 hover:bg-blue-600 text-white shadow-md shrink-0 cursor-pointer disabled:opacity-75 disabled:pointer-events-none"
+          className="h-8 w-8 rounded-full bg-blue-600/90 hover:bg-blue-600 text-white shadow-md shrink-0 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
         >
           {isPlaying ? (
             <Pause className="h-3.5 w-3.5 fill-white" />
@@ -357,7 +367,7 @@ export function AudioWaveformPlayer({
           disabled={isGlobalPlaying}
           variant="ghost"
           size="icon"
-          className="h-7 w-7 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-850 shrink-0 cursor-pointer disabled:pointer-events-none"
+          className="h-7 w-7 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-850 shrink-0 cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
           title="Rewind 5s"
         >
           <RotateCcw className="h-3.5 w-3.5" />
@@ -369,7 +379,7 @@ export function AudioWaveformPlayer({
           disabled={isGlobalPlaying}
           variant="ghost"
           size="icon"
-          className="h-7 w-7 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-850 shrink-0 cursor-pointer disabled:pointer-events-none"
+          className="h-7 w-7 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-850 shrink-0 cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
           title="Forward 5s"
         >
           <RotateCw className="h-3.5 w-3.5" />
@@ -395,11 +405,32 @@ export function AudioWaveformPlayer({
           onClick={changeSpeed}
           disabled={isGlobalPlaying}
           type="button"
-          className="flex-shrink-0 text-[9px] font-extrabold px-1.5 py-1 rounded-lg bg-zinc-800 border border-zinc-700/40 text-zinc-300 hover:text-white hover:bg-zinc-750 transition-all cursor-pointer disabled:pointer-events-none"
+          className="flex-shrink-0 text-[9px] font-extrabold px-1.5 py-1 rounded-lg bg-zinc-800 border border-zinc-700/40 text-zinc-300 hover:text-white hover:bg-zinc-750 transition-all cursor-pointer disabled:opacity-45 disabled:pointer-events-none"
           title="Playback speed"
         >
           {playbackRate}x
         </button>
+
+        {isGlobalPlaying && (
+          <div className="relative flex-shrink-0">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowInfoPopover(!showInfoPopover)
+              }}
+              className="text-zinc-500 hover:text-zinc-400 cursor-pointer transition-colors p-0.5"
+              title="Controls are disabled while the assistant is speaking in real-time. Click for info."
+            >
+              <Info className="h-3.5 w-3.5" />
+            </button>
+            {showInfoPopover && (
+              <div className="absolute bottom-full right-0 mb-2 w-48 bg-zinc-900 border border-zinc-800 p-2.5 rounded-lg text-[10px] text-zinc-300 shadow-xl z-30 leading-normal">
+                Controls are disabled while the assistant is speaking in real-time. You can adjust playback controls once the speech completes.
+              </div>
+            )}
+          </div>
+        )}
       </div>
     )
   }
@@ -518,7 +549,7 @@ export function AudioWaveformPlayer({
           <a
             href={src}
             download={`synthesis_output.wav`}
-            className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-teal-500/10 to-emerald-500/10 border border-teal-500/30 hover:border-teal-500/50 hover:bg-gradient-to-r hover:from-teal-500/20 hover:to-emerald-500/20 text-teal-300 hover:text-white rounded-xl text-xs font-semibold transition-all shadow-md"
+            className="flex items-center gap-1.5 px-4 py-2 bg-teal-950/15 border border-teal-800/40 hover:bg-teal-950/30 hover:border-teal-500/50 text-teal-300 hover:text-white rounded-xl text-xs font-semibold transition-all shadow-md"
           >
             <Download className="h-3.5 w-3.5" />
             <span>Download WAV</span>

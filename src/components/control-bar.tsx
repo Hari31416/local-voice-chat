@@ -6,10 +6,11 @@ import {
   MicOff,
   Phone,
   PhoneOff,
+  Send,
   Volume2,
   VolumeX,
   X,
-} from "lucide-react"
+} from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { LiveWaveform } from "@/components/ui/live-waveform"
 import type { useTTS } from "@/hooks/use-tts"
@@ -267,11 +268,22 @@ export function ControlBar({
                     value={textInput}
                     onChange={(e) => onTextInputChange(e.target.value)}
                     placeholder={
-                      setupPhase !== "ready" ? "Loading models..." : "How can I help?"
+                      setupPhase !== 'ready' ? 'Loading models...' : 'How can I help?'
                     }
-                    disabled={status !== "ready"}
+                    disabled={status !== 'ready'}
                     className="flex-1 bg-transparent text-zinc-200 text-sm outline-none placeholder:text-zinc-500 disabled:text-zinc-500"
                   />
+
+                  <Button
+                    type="submit"
+                    size="icon"
+                    variant="ghost"
+                    disabled={!textInput.trim() || status !== 'ready'}
+                    className="h-7 w-7 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-full flex-shrink-0 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
+                    title="Send message"
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
                 </form>
 
                 {setupPhase === "ready" && status !== "loading" && (

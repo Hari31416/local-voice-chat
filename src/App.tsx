@@ -27,40 +27,40 @@ export default function App() {
       <header className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 border-b border-zinc-900 bg-zinc-950/80 backdrop-blur-md z-40 gap-4 flex-shrink-0">
         <div className="flex items-center gap-2">
           <div className="h-2 w-2 rounded-full bg-purple-500 animate-pulse" />
-          <span className="text-xl font-extrabold bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 bg-clip-text text-transparent">
+          <span className="text-xl font-bold text-white tracking-tight">
             WebVoice Studio
           </span>
         </div>
         <div className="flex items-center bg-zinc-900/60 p-0.5 rounded-full border border-zinc-800/80">
           <button
-            onClick={() => handleTabChange("voice")}
+            onClick={() => handleTabChange('voice')}
             className={cn(
-              "px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-200 cursor-pointer",
-              activeTab === "voice"
-                ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/20"
-                : "text-zinc-400 hover:text-zinc-200"
+              'px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-200 cursor-pointer',
+              activeTab === 'voice'
+                ? 'bg-zinc-800 text-white shadow border border-zinc-700'
+                : 'text-zinc-400 hover:text-zinc-200'
             )}
           >
             Voice Agent
           </button>
           <button
-            onClick={() => handleTabChange("tts")}
+            onClick={() => handleTabChange('tts')}
             className={cn(
-              "px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-200 cursor-pointer",
-              activeTab === "tts"
-                ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/20"
-                : "text-zinc-400 hover:text-zinc-200"
+              'px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-200 cursor-pointer',
+              activeTab === 'tts'
+                ? 'bg-zinc-800 text-white shadow border border-zinc-700'
+                : 'text-zinc-400 hover:text-zinc-200'
             )}
           >
             TTS Studio
           </button>
           <button
-            onClick={() => handleTabChange("stt")}
+            onClick={() => handleTabChange('stt')}
             className={cn(
-              "px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-200 cursor-pointer",
-              activeTab === "stt"
-                ? "bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg shadow-green-500/20"
-                : "text-zinc-400 hover:text-zinc-200"
+              'px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-200 cursor-pointer',
+              activeTab === 'stt'
+                ? 'bg-zinc-800 text-white shadow border border-zinc-700'
+                : 'text-zinc-400 hover:text-zinc-200'
             )}
           >
             STT Studio
