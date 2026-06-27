@@ -94,3 +94,26 @@ export function getSupertonicVoice(voiceId: string): SupertonicVoiceOption | und
 export function getDefaultVoiceForEngine(engine: "supertonic" | "piper"): string {
   return engine === "supertonic" ? "F1" : PIPER_VOICES[0].id
 }
+
+export type VoiceGender = "female" | "male"
+
+export interface VoiceProfile {
+  gender: VoiceGender
+  label: string
+}
+
+export function getVoiceProfile(engine: "supertonic" | "piper", voiceId: string): VoiceProfile | null {
+  if (engine === "supertonic") {
+    const voice = getSupertonicVoice(voiceId)
+    if (!voice) return null
+    const gender: VoiceGender = voiceId.startsWith("M") ? "male" : "female"
+    return { gender, label: voice.name }
+  }
+
+  const voice = getPiperVoice(voiceId)
+  if (!voice) return null
+  const desc = voice.desc.toLowerCase()
+  if (desc.includes("female")) return { gender: "female", label: voice.name }
+  if (desc.includes("male")) return { gender: "male", label: voice.name }
+  return null
+}

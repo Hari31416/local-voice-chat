@@ -21,7 +21,7 @@ import {
   savePreferences,
   type UserPreferences,
 } from "@/lib/user-preferences"
-import { PIPER_VOICES, SUPERTRONIC_VOICES, TTS_ENGINE_OPTIONS } from "@/lib/tts-voices"
+import { PIPER_VOICES, SUPERTRONIC_VOICES, TTS_ENGINE_OPTIONS, getVoiceProfile } from "@/lib/tts-voices"
 import { resizeImage } from "@/lib/utils"
 import { pcmToWav } from "@/lib/piper/wav"
 import { TextSplitterStream } from "@/lib/splitter"
@@ -142,6 +142,7 @@ export function useVoiceAgent() {
 
   const gemma4Ref = useRef(gemma4)
   const webllmRef = useRef(webllm)
+  const ttsRef = useRef(tts)
   const selectedLLMIdRef = useRef(selectedLLMId)
   const prefsRef = useRef(prefs)
   const setupPhaseRef = useRef(setupPhase)
@@ -149,10 +150,11 @@ export function useVoiceAgent() {
   useEffect(() => {
     gemma4Ref.current = gemma4
     webllmRef.current = webllm
+    ttsRef.current = tts
     selectedLLMIdRef.current = selectedLLMId
     prefsRef.current = prefs
     setupPhaseRef.current = setupPhase
-  }, [gemma4, webllm, selectedLLMId, prefs, setupPhase])
+  }, [gemma4, webllm, tts, selectedLLMId, prefs, setupPhase])
 
   const selectedOption = LLM_OPTIONS.find((o) => o.id === selectedLLMId) || LLM_OPTIONS[0]
   const llmLoadProgress =
@@ -227,7 +229,10 @@ export function useVoiceAgent() {
         const option =
           LLM_OPTIONS.find((o) => o.id === selectedLLMIdRef.current) || LLM_OPTIONS[0]
         const ttsEnabled = prefsRef.current.ttsEnabled
-        const systemPrompt = buildSystemPrompt(lastUserText, ttsEnabled)
+        const voiceProfile = ttsEnabled
+          ? getVoiceProfile(ttsRef.current.engine, ttsRef.current.voice)
+          : null
+        const systemPrompt = buildSystemPrompt(lastUserText, ttsEnabled, voiceProfile)
         const maxTokens = getMaxTokens(
           option.backend === "gemma4" ? "gemma4" : "webllm",
           ttsEnabled,
