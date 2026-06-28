@@ -1,6 +1,7 @@
 /**
  * STT Worker - ES Module version
- * Handles VAD + Whisper transcription
+ * Handles VAD + transcription for Whisper, Distil-Whisper, Moonshine, and Wav2Vec2/MMS.
+ * For Vosk and Sherpa ONNX models use their dedicated workers instead.
  */
 
 // Suppress noisy ONNX/hub warnings in worker
@@ -38,6 +39,8 @@ const MAX_NUM_PREV_BUFFERS = Math.ceil(SPEECH_PAD_SAMPLES / 512)
 let sileroVad = null
 let transcriber = null
 let loadedModelId = null
+/** True when the currently loaded model is a CTC model (e.g. Wav2Vec2). */
+let isCTCModel = false
 
 const BUFFER = new Float32Array(MAX_BUFFER_DURATION * INPUT_SAMPLE_RATE)
 let bufferPointer = 0
@@ -150,29 +153,48 @@ async function loadModels(modelId = "whisper-base") {
   if (!transcriber || loadedModelId !== modelId) {
     transcriber = null
     fileProgressMap.clear()
-    self.postMessage({ type: "status", status: "loading", message: `Loading Whisper model (${modelId})...` })
+    self.postMessage({ type: "status", status: "loading", message: `Loading STT model (${modelId})...` })
 
-    // Map modelId to Hugging Face onnx-community models
+    // Map modelId → Hugging Face path.
+    // Whisper variants use the autoregressive ASR pipeline.
+    // Distil-Whisper and Moonshine are also autoregressive (same pipeline).
+    // Wav2Vec2 / MMS are CTC-based (single forward pass, no task/language opts).
     const modelPaths = {
+      // ── Whisper (original) ────────────────────────────────────────────
       "whisper-tiny.en": "onnx-community/whisper-tiny.en",
       "whisper-tiny": "onnx-community/whisper-tiny",
       "whisper-base.en": "onnx-community/whisper-base.en",
       "whisper-base": "onnx-community/whisper-base",
       "whisper-small.en": "onnx-community/whisper-small.en",
       "whisper-small": "onnx-community/whisper-small",
+      // ── Distil-Whisper ────────────────────────────────────────────────
+      "distil-small.en": "onnx-community/distil-small.en",
+      "distil-medium.en": "onnx-community/distil-medium.en",
+      "distil-large-v3.5": "onnx-community/distil-large-v3.5-ONNX",
+      // ── Moonshine ────────────────────────────────────────────────────
+      "moonshine-tiny": "onnx-community/moonshine-tiny-ONNX",
+      "moonshine-base": "onnx-community/moonshine-base-ONNX",
+      // ── Wav2Vec2 / MMS (CTC) ─────────────────────────────────────────
+      "wav2vec2-base": "Xenova/wav2vec2-base-960h",
+      "wav2vec2-large-xlsr": "Xenova/wav2vec2-large-xlsr-53-english",
     }
-    const whisperModel = modelPaths[modelId] || "onnx-community/whisper-base"
-    
+
+    // CTC models skip whisper-specific task/language args
+    const CTC_MODELS = new Set(["wav2vec2-base", "wav2vec2-large-xlsr"])
+    isCTCModel = CTC_MODELS.has(modelId)
+
+    const hfPath = modelPaths[modelId] || "onnx-community/whisper-base"
+
     try {
-      transcriber = await pipeline("automatic-speech-recognition", whisperModel, {
+      transcriber = await pipeline("automatic-speech-recognition", hfPath, {
         dtype: "fp32",
         device: selectedDevice,
-        progress_callback: (progress) => reportProgress(progress, "Whisper"),
+        progress_callback: (progress) => reportProgress(progress, "STT"),
       })
       loadedModelId = modelId
     } catch (e) {
-      console.error("[STT Worker] Whisper load failed:", e)
-      self.postMessage({ type: "error", message: `Whisper failed: ${e.message}` })
+      console.error("[STT Worker] Model load failed:", e)
+      self.postMessage({ type: "error", message: `Model load failed: ${e.message}` })
       return
     }
 
@@ -208,8 +230,11 @@ async function transcribe(buffer) {
 
   self.postMessage({ type: "status", status: "transcribing", message: "Transcribing..." })
 
-  // English-only model - don't specify language/task
-  const result = await transcriber(buffer)
+  // CTC models (Wav2Vec2/MMS) do a single forward pass — no task/language opts.
+  // Autoregressive models (Whisper, Distil-Whisper, Moonshine) accept them fine.
+  const result = isCTCModel
+    ? await transcriber(buffer)
+    : await transcriber(buffer)
 
   return result.text.trim()
 }
@@ -342,7 +367,7 @@ self.onmessage = async (event) => {
 
     case "transcribe_buffer":
       if (!transcriber) {
-        self.postMessage({ type: "error", message: "Whisper model not loaded yet" })
+        self.postMessage({ type: "error", message: "STT model not loaded yet" })
         break
       }
       try {

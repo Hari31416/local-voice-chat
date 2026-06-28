@@ -20,7 +20,7 @@ import {
   loadPreferences,
   savePreferences,
   type UserPreferences,
-} from "@/lib/user-preferences"
+} from '@/lib/user-preferences'
 import { PIPER_VOICES, SUPERTRONIC_VOICES, TTS_ENGINE_OPTIONS, getVoiceProfile } from "@/lib/tts-voices"
 import { resizeImage } from "@/lib/utils"
 import { pcmToWav } from "@/lib/piper/wav"
@@ -479,7 +479,7 @@ export function useVoiceAgent() {
   const initWorker = useCallback(() => {
     if (workerRef.current) return
 
-    const worker = new Worker("/stt-worker-esm.js", { type: "module" })
+    const worker = new Worker('/stt-worker-esm.js', { type: 'module' })
 
     worker.onmessage = async (event) => {
       const { type, status: msgStatus, message, text, isFinal, progress } = event.data
@@ -605,10 +605,10 @@ export function useVoiceAgent() {
     }
     setDebugInfo((prev) => ({ ...prev, sttLoaded: false }))
     initWorker()
-    setStatus("loading")
+    setStatus('loading')
     setSttLoadProgress(0)
     setStatusMessage(`Loading STT model (${activeModelId})...`)
-    workerRef.current?.postMessage({ type: "init", modelId: activeModelId })
+    workerRef.current?.postMessage({ type: 'init', modelId: activeModelId })
   }, [initWorker])
 
   const transcribeAudioBuffer = useCallback((buffer: Float32Array) => {

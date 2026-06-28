@@ -3,6 +3,41 @@ import { Mic, MicOff, Upload, Copy, Check, FileAudio, AudioLines, RefreshCw } fr
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { STT_OPTIONS } from "@/lib/stt-models"
+import type { STTModelOption } from "@/lib/stt-models"
+
+// ── STT grouping helpers (mirrors setup-screen.tsx) ─────────────────────────────
+
+const STT_ENGINE_GROUP_LABELS: Record<string, string> = {
+  whisper: 'Whisper',
+  distil: 'Distil-Whisper',
+  moonshine: 'Moonshine',
+  wav2vec2: 'Wav2Vec2 / MMS',
+}
+
+function getModelGroup(opt: STTModelOption): string {
+  if (opt.id.startsWith('distil')) return 'distil'
+  if (opt.id.startsWith('whisper')) return 'whisper'
+  if (opt.id.startsWith('moonshine')) return 'moonshine'
+  if (opt.id.startsWith('wav2vec2')) return 'wav2vec2'
+  return 'other'
+}
+
+function groupSTTOptions(options: STTModelOption[]): { label: string; opts: STTModelOption[] }[] {
+  const map = new Map<string, STTModelOption[]>()
+  for (const opt of options) {
+    const key = getModelGroup(opt)
+    if (!map.has(key)) map.set(key, [])
+    map.get(key)!.push(opt)
+  }
+  return Array.from(map.entries()).map(([key, opts]) => ({
+    label: STT_ENGINE_GROUP_LABELS[key] ?? key,
+    opts,
+  }))
+}
+
+function sttOptionLabel(opt: STTModelOption): string {
+  return `${opt.name} (${opt.sizeLabel})`
+}
 
 interface STTStudioProps {
   isSttLoaded: boolean
@@ -204,7 +239,7 @@ export function STTStudio({
           <AudioLines className="h-12 w-12 text-zinc-600 mx-auto animate-pulse" />
           <h2 className="text-lg font-bold text-white">Speech Recognition Model Required ({selectedStt.name})</h2>
           <p className="text-zinc-400 text-xs max-w-sm mx-auto">
-            This module requires downloading local Whisper model ({selectedStt.sizeLabel}) and VAD systems to run on-device.
+            This module requires downloading a local speech recognition model ({selectedStt.sizeLabel}) and VAD systems to run on-device.
           </p>
           {loadingModel || (sttLoadProgress > 0 && sttLoadProgress < 100) ? (
             <div className="max-w-xs mx-auto space-y-2">
@@ -228,10 +263,14 @@ export function STTStudio({
                     onChange={(e) => setSelectedModelId(e.target.value)}
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none cursor-pointer hover:border-zinc-700 focus:border-zinc-600 transition-colors"
                   >
-                    {STT_OPTIONS.map((opt) => (
-                      <option key={opt.id} value={opt.id} className="bg-zinc-950 text-white">
-                        {opt.name} ({opt.sizeLabel})
-                      </option>
+                    {groupSTTOptions(STT_OPTIONS).map(({ label, opts }) => (
+                      <optgroup key={label} label={label} className="bg-zinc-950">
+                        {opts.map((opt) => (
+                          <option key={opt.id} value={opt.id} className="bg-zinc-950 text-white">
+                            {sttOptionLabel(opt)}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>
@@ -262,10 +301,14 @@ export function STTStudio({
                   }}
                   className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none cursor-pointer hover:border-zinc-700 focus:border-zinc-600 transition-colors disabled:opacity-50"
                 >
-                  {STT_OPTIONS.map((opt) => (
-                    <option key={opt.id} value={opt.id} className="bg-zinc-950 text-white">
-                      {opt.name} ({opt.sizeLabel})
-                    </option>
+                  {groupSTTOptions(STT_OPTIONS).map(({ label, opts }) => (
+                    <optgroup key={label} label={label} className="bg-zinc-950">
+                      {opts.map((opt) => (
+                        <option key={opt.id} value={opt.id} className="bg-zinc-950 text-white">
+                          {sttOptionLabel(opt)}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </div>
