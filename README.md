@@ -6,7 +6,7 @@ A fully local voice AI workbench in your browser — conversational chat, text-t
 
 **Everything runs in your browser:**
 
-- **Speech-to-Text**: Whisper model via WebGPU/WASM (optional — disable for text-only chat)
+- **Speech-to-Text**: Whisper, Distil-Whisper, Moonshine, or Wav2Vec2 — all via WebGPU/WASM (optional — disable for text-only chat)
 - **Voice Activity Detection**: Silero VAD detects when you're speaking
 - **LLM**: Gemma 4 E2B via Transformers.js + ONNX WebGPU, or Qwen / Llama via WebLLM
 - **Text-to-Speech**: **Supertonic 3** (multilingual) or **Piper** (lightweight per-voice models) — optional for text-only mode
@@ -63,23 +63,33 @@ Open [http://localhost:5173](http://localhost:5173) in Chrome or Edge.
 
 | Asset | Size | When | Cached |
 |-------|------|------|--------|
-| Whisper STT model | ~150MB | First use (if STT enabled) | ✓ IndexedDB |
-| Silero VAD model | ~2MB | First use (if STT enabled) | ✓ IndexedDB |
-| Gemma 4 E2B LLM | ~3.2GB | First use (if selected) | ✓ IndexedDB |
-| WebLLM models | ~400MB–2GB | First use (if selected) | ✓ IndexedDB |
-| Supertonic 3 TTS | ~400MB | First use (if selected) | ✓ Cache API |
-| Piper TTS voice | ~15–75MB each | First use (if selected) | ✓ OPFS / browser cache |
-| Voice styles (Supertonic) | ~300KB each | On voice select | ✓ Memory |
+| Moonshine Tiny | ~27 MB | First use (if STT enabled) | ✓ IndexedDB |
+| Moonshine Base | ~61 MB | First use (if STT enabled) | ✓ IndexedDB |
+| Whisper Tiny | ~75 MB | First use (if STT enabled) | ✓ IndexedDB |
+| Whisper Base | ~145 MB | First use (if STT enabled) | ✓ IndexedDB |
+| Distil-Whisper Small | ~150 MB | First use (if STT enabled) | ✓ IndexedDB |
+| Wav2Vec2 Base | ~360 MB | First use (if STT enabled) | ✓ IndexedDB |
+| Distil-Whisper Medium | ~350 MB | First use (if STT enabled) | ✓ IndexedDB |
+| Whisper Small | ~480 MB | First use (if STT enabled) | ✓ IndexedDB |
+| Distil-Whisper Large v3.5 | ~750 MB | First use (if STT enabled) | ✓ IndexedDB |
+| Wav2Vec2 Large XLSR | ~1.2 GB | First use (if STT enabled) | ✓ IndexedDB |
+| Silero VAD model | ~2 MB | First use (if STT enabled) | ✓ IndexedDB |
+| Gemma 4 E2B LLM | ~3.2 GB | First use (if selected) | ✓ IndexedDB |
+| WebLLM models | ~400 MB–2 GB | First use (if selected) | ✓ IndexedDB |
+| Supertonic 3 TTS | ~400 MB | First use (if selected) | ✓ Cache API |
+| Piper TTS voice | ~15–75 MB each | First use (if selected) | ✓ OPFS / browser cache |
+| Voice styles (Supertonic) | ~300 KB each | On voice select | ✓ Memory |
 
-First load downloads models based on your setup choices (typically 150MB–4GB) from HuggingFace CDN. After that, everything runs offline.
+First load downloads models based on your setup choices from HuggingFace CDN. After that, everything runs offline.
 
 ## Model setup
 
-On first launch you pick **LLM**, whether to enable **STT** and **TTS**, **TTS engine** (Supertonic 3 or Piper), **voice**, and **language** before any downloads begin. The setup screen shows estimated download sizes per selection.
+On first launch you pick **LLM**, whether to enable **STT** and **TTS**, **STT model**, **TTS engine** (Supertonic 3 or Piper), **voice**, and **language** before any downloads begin. The setup screen shows estimated download sizes per selection.
 
-Choices are saved in `localStorage` and can be cleared with **Reset choices** on the setup screen or in the debug panel (gear icon). You can also switch LLM, voice, and language from the control bar during a session.
+Choices are saved in `localStorage` and can be cleared with **Reset choices** on the setup screen or in the debug panel (gear icon). You can also switch LLM, STT model, voice, and language from the control bar during a session.
 
-**Default LLM**: Gemma 4 E2B on desktop; Qwen 0.5B on iOS (WebGPU limitations).
+**Default LLM**: Gemma 4 E2B on desktop; Qwen 0.5B on iOS (WebGPU limitations).  
+**Default STT model**: Whisper Base (Multilingual) — a good balance of size and accuracy.
 
 ## Requirements
 
@@ -88,6 +98,50 @@ Choices are saved in `localStorage` and can be cleared with **Reset choices** on
 - **Microphone**: Required only when STT is enabled
 
 TTS falls back to WASM if WebGPU is unavailable (Supertonic). Piper always uses WASM.
+
+## STT engines
+
+All engines run entirely in the browser via Transformers.js (ONNX Runtime). Choose based on size, speed, and language needs.
+
+### Whisper
+
+OpenAI Whisper models via `onnx-community/whisper-*`. Available in three sizes:
+
+| Model         | Size    | Languages                    |
+| ------------- | ------- | ---------------------------- |
+| Whisper Tiny  | ~75 MB  | English-only or multilingual |
+| Whisper Base  | ~145 MB | English-only or multilingual |
+| Whisper Small | ~480 MB | English-only or multilingual |
+
+### Distil-Whisper
+
+Distilled Whisper variants — significantly smaller with comparable accuracy on English:
+
+| Model                     | Size    | Languages    |
+| ------------------------- | ------- | ------------ |
+| Distil-Whisper Small      | ~150 MB | English-only |
+| Distil-Whisper Medium     | ~350 MB | English-only |
+| Distil-Whisper Large v3.5 | ~750 MB | Multilingual |
+
+### Moonshine
+
+[UsefulSensors/moonshine](https://github.com/usefulsensors/moonshine) — ultra-lightweight English ASR optimised for edge devices:
+
+| Model          | Size   | Languages    |
+| -------------- | ------ | ------------ |
+| Moonshine Tiny | ~27 MB | English-only |
+| Moonshine Base | ~61 MB | English-only |
+
+### Wav2Vec2 / MMS
+
+Facebook's CTC-based models — no autoregressive decoding, very fast inference:
+
+| Model               | Size    | Languages    |
+| ------------------- | ------- | ------------ |
+| Wav2Vec2 Base       | ~360 MB | English-only |
+| Wav2Vec2 Large XLSR | ~1.2 GB | Multilingual |
+
+All engines share the same Silero VAD pipeline for voice activity detection.
 
 ## TTS engines
 
@@ -149,8 +203,9 @@ src/
         └── engine.ts               # Supertonic 3 ONNX inference
 
 public/
-├── stt-worker-esm.js               # Whisper + VAD worker
-└── vad-processor.js                # Audio worklet
+├── stt-worker-esm.js               # STT worker (Whisper / Distil-Whisper / Moonshine / Wav2Vec2) + VAD
+├── vad-processor.js                # Audio worklet
+└── samples/                        # Sample WAV files for STT Studio testing (16-bit 16kHz mono)
 ```
 
 ## Using a Different LLM
@@ -165,7 +220,7 @@ To use a remote API instead, replace the `llm.chat()` call in `use-voice-agent.t
 
 - **Framework**: Vite, React 19, TypeScript
 - **UI**: shadcn/ui, Tailwind CSS v4
-- **STT**: Whisper via @huggingface/transformers
+- **STT**: Whisper, Distil-Whisper, Moonshine, Wav2Vec2 via @huggingface/transformers (ONNX Runtime Web)
 - **VAD**: Silero VAD via ONNX Runtime
 - **LLM**: Gemma 4 E2B via @huggingface/transformers (WebGPU ONNX); Qwen / Llama via @mlc-ai/web-llm
 - **TTS**: Supertonic 3 or Piper via onnxruntime-web / @realtimex/piper-tts-web
@@ -182,6 +237,9 @@ MIT License — see [LICENSE](LICENSE)
 - [Supertonic 3](https://github.com/supertone-inc/supertonic) — multilingual TTS engine
 - [Piper](https://github.com/rhasspy/piper) / [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices) — lightweight TTS option
 - [Whisper](https://github.com/openai/whisper) — OpenAI
+- [Distil-Whisper](https://github.com/huggingface/distil-whisper) — Hugging Face
+- [Moonshine](https://github.com/usefulsensors/moonshine) — Useful Sensors
+- [Wav2Vec2](https://github.com/facebookresearch/fairseq/tree/main/examples/wav2vec) — Meta AI
 - [Gemma 4 E2B ONNX](https://huggingface.co/onnx-community/gemma-4-E2B-it-ONNX) — default LLM
 - [Gemma 4 WebGPU Kernels demo](https://huggingface.co/spaces/webml-community/gemma-4-webgpu-kernels) — reference implementation
 - [WebLLM](https://github.com/mlc-ai/web-llm) — MLC AI (Qwen / Llama models)
