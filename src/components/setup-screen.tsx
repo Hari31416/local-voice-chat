@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { DEFAULT_LLM_ID, LLM_OPTIONS } from "@/lib/llm-models"
+import { STT_OPTIONS } from "@/lib/stt-models"
 import type { TTSEngine, TTSLanguage } from "@/lib/tts-types"
 import {
   getDefaultVoiceForEngine,
@@ -22,6 +23,7 @@ const SUPERTRONIC_LANGUAGES: { id: TTSLanguage; label: string }[] = [
 export interface SetupSelection {
   llmId: string
   sttEnabled: boolean
+  sttModelId: string
   ttsEnabled: boolean
   ttsEngine: TTSEngine
   ttsVoice: string
@@ -54,6 +56,7 @@ export function SetupScreen({
 }: SetupScreenProps) {
   const [llmId, setLlmId] = useStateSelection(initial.llmId)
   const [sttEnabled, setSttEnabled] = useStateSelection(initial.sttEnabled)
+  const [sttModelId, setSttModelId] = useStateSelection(initial.sttModelId)
   const [ttsEnabled, setTtsEnabled] = useStateSelection(initial.ttsEnabled)
   const [ttsEngine, setTtsEngine] = useStateSelection<TTSEngine>(initial.ttsEngine)
   const [ttsVoice, setTtsVoice] = useStateSelection(initial.ttsVoice)
@@ -80,7 +83,8 @@ export function SetupScreen({
   }
 
   const estimatedDownload = (() => {
-    const stt = sttEnabled ? "~150 MB" : null
+    const selectedStt = STT_OPTIONS.find((s) => s.id === sttModelId) || STT_OPTIONS[2]
+    const stt = sttEnabled ? selectedStt.sizeLabel : null
     const llm = selectedLlm.sizeLabel
     const tts = !ttsEnabled
       ? null
@@ -176,7 +180,9 @@ export function SetupScreen({
               >
                 <div className="font-semibold text-white text-xs">Speech recognition</div>
                 <p className="text-[10px] text-zinc-500 mt-0.5">
-                  {sttEnabled ? 'On · ~150 MB' : 'Skipped · text input only'}
+                  {sttEnabled
+                    ? `On · ${STT_OPTIONS.find((s) => s.id === sttModelId)?.sizeLabel ?? '~150 MB'}`
+                    : 'Skipped · text input only'}
                 </p>
               </button>
               <button
@@ -195,6 +201,22 @@ export function SetupScreen({
                 </p>
               </button>
             </div>
+            {sttEnabled && (
+              <div className="space-y-1.5">
+                <label className="text-zinc-400 text-[10px] uppercase tracking-wider font-semibold">Speech recognition model</label>
+                <select
+                  value={sttModelId}
+                  onChange={(e) => setSttModelId(e.target.value)}
+                  className="w-full bg-zinc-905 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none cursor-pointer hover:border-zinc-700 focus:border-zinc-600 transition-colors"
+                >
+                  {STT_OPTIONS.map((opt) => (
+                    <option key={opt.id} value={opt.id} className="bg-zinc-950 text-white">
+                      {opt.name} ({opt.sizeLabel})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             {sttEnabled && !ttsEnabled && (
               <p className="text-[10px] text-zinc-500">
                 Mic button will be used for voice input without call mode.
@@ -205,23 +227,6 @@ export function SetupScreen({
                 Full call mode with continuous voice conversation.
               </p>
             )}
-            <button
-              type="button"
-              onClick={() => setHindiTypingEnabled(!hindiTypingEnabled)}
-              className={cn(
-                'w-full p-2.5 rounded-lg border text-left transition-all duration-150 cursor-pointer',
-                hindiTypingEnabled
-                  ? 'bg-zinc-800/80 border-zinc-500 ring-1 ring-zinc-500/25'
-                  : 'bg-zinc-900/40 border-zinc-800 hover:bg-zinc-900/80 hover:border-zinc-700 opacity-70',
-              )}
-            >
-              <div className="font-semibold text-white text-xs">Hindi typing (Lipilekhika)</div>
-              <p className="text-[10px] text-zinc-500 mt-0.5">
-                {hindiTypingEnabled
-                  ? 'On · type Roman letters → Devanagari (e.g. namaste → नमस्ते)'
-                  : 'Off · type Devanagari directly or use English'}
-              </p>
-            </button>
           </section>
 
           {ttsEnabled && (
@@ -316,6 +321,7 @@ export function SetupScreen({
                 onStart({
                   llmId,
                   sttEnabled,
+                  sttModelId,
                   ttsEnabled,
                   ttsEngine,
                   ttsVoice,

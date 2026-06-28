@@ -499,7 +499,12 @@ export function useVoiceAgent() {
         case "status":
           if (msgStatus === "ready") {
             setSttLoadProgress(100)
-            setDebugInfo((prev) => ({ ...prev, vadLoaded: true, sttLoaded: true }))
+            setDebugInfo((prev) => ({
+              ...prev,
+              vadLoaded: true,
+              sttLoaded: true,
+              sttBackend: prefsRef.current.sttModelId,
+            }))
 
             if (setupPhaseRef.current === "loading") {
               await loadTtsThenLlm()
@@ -580,21 +585,30 @@ export function useVoiceAgent() {
   const loadModels = useCallback(async () => {
     setStatus("loading")
     if (prefsRef.current.sttEnabled) {
+      setDebugInfo((prev) => ({ ...prev, sttLoaded: false }))
       initWorker()
       setSttLoadProgress(0)
       setStatusMessage("Loading STT models...")
-      workerRef.current?.postMessage({ type: "init" })
+      workerRef.current?.postMessage({ type: "init", modelId: prefsRef.current.sttModelId })
     } else {
       await loadTtsThenLlm()
     }
   }, [initWorker, loadTtsThenLlm])
 
-  const loadSTTOnly = useCallback(async () => {
+  const loadSTTOnly = useCallback(async (modelId?: string) => {
+    const activeModelId = modelId || prefsRef.current.sttModelId
+    if (modelId && modelId !== prefsRef.current.sttModelId) {
+      const next = { ...prefsRef.current, sttModelId: modelId, configured: true }
+      savePreferences(next)
+      setPrefs(next)
+      prefsRef.current = next
+    }
+    setDebugInfo((prev) => ({ ...prev, sttLoaded: false }))
     initWorker()
     setStatus("loading")
     setSttLoadProgress(0)
-    setStatusMessage("Loading STT models...")
-    workerRef.current?.postMessage({ type: "init" })
+    setStatusMessage(`Loading STT model (${activeModelId})...`)
+    workerRef.current?.postMessage({ type: "init", modelId: activeModelId })
   }, [initWorker])
 
   const transcribeAudioBuffer = useCallback((buffer: Float32Array) => {

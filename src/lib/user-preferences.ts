@@ -1,4 +1,5 @@
 import { DEFAULT_LLM_ID, LLM_OPTIONS } from "@/lib/llm-models"
+import { DEFAULT_STT_ID, STT_OPTIONS } from "@/lib/stt-models"
 import type { TTSEngine, TTSLanguage } from "@/lib/tts-types"
 import { getDefaultVoiceForEngine, getPiperVoice, getSupertonicVoice } from "@/lib/tts-voices"
 
@@ -8,6 +9,7 @@ const LEGACY_LLM_KEY = "voice_agent_selected_model"
 export interface UserPreferences {
   llmId: string
   sttEnabled: boolean
+  sttModelId: string
   ttsEnabled: boolean
   ttsEngine: TTSEngine
   ttsVoice: string
@@ -20,6 +22,7 @@ export interface UserPreferences {
 export const DEFAULT_PREFERENCES: UserPreferences = {
   llmId: DEFAULT_LLM_ID,
   sttEnabled: true,
+  sttModelId: DEFAULT_STT_ID,
   ttsEnabled: true,
   ttsEngine: "supertonic",
   ttsVoice: "F1",
@@ -34,6 +37,7 @@ export function defaultHindiTypingForLanguage(language: TTSLanguage): boolean {
 
 function normalizePreferences(partial: Partial<UserPreferences>): UserPreferences {
   const llmId = LLM_OPTIONS.some((o) => o.id === partial.llmId) ? partial.llmId! : DEFAULT_LLM_ID
+  const sttModelId = STT_OPTIONS.some((o) => o.id === partial.sttModelId) ? partial.sttModelId! : DEFAULT_STT_ID
   const ttsEngine: TTSEngine = partial.ttsEngine === "piper" ? "piper" : "supertonic"
   const defaultVoice = getDefaultVoiceForEngine(ttsEngine)
   const ttsVoice =
@@ -44,6 +48,7 @@ function normalizePreferences(partial: Partial<UserPreferences>): UserPreference
   return {
     llmId,
     sttEnabled: partial.sttEnabled !== false,
+    sttModelId,
     ttsEnabled: partial.ttsEnabled !== false,
     ttsEngine,
     ttsVoice,

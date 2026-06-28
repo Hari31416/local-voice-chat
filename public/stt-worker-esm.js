@@ -37,6 +37,7 @@ const MAX_NUM_PREV_BUFFERS = Math.ceil(SPEECH_PAD_SAMPLES / 512)
 // ============ State ============
 let sileroVad = null
 let transcriber = null
+let loadedModelId = null
 
 const BUFFER = new Float32Array(MAX_BUFFER_DURATION * INPUT_SAMPLE_RATE)
 let bufferPointer = 0
@@ -119,8 +120,8 @@ function reportProgress(progress, prefix) {
 }
 
 // ============ Model Loading ============
-async function loadModels() {
-  if (sileroVad && transcriber) {
+async function loadModels(modelId = "whisper-base") {
+  if (sileroVad && transcriber && loadedModelId === modelId) {
     self.postMessage({ type: "status", status: "ready", message: "Models loaded!" })
     return
   }
@@ -129,46 +130,60 @@ async function loadModels() {
   selectedDevice = await getDevice()
   
   fileProgressMap.clear()
-  self.postMessage({ type: "status", status: "loading", message: `Loading VAD model (${selectedDevice})...` })
-
-  // Load Silero VAD from onnx-community (public, no auth required)
-  sileroVad = await AutoModel.from_pretrained("onnx-community/silero-vad", {
-    config: { model_type: "custom" },
-    dtype: "fp32",
-    device: selectedDevice,
-    progress_callback: (progress) => reportProgress(progress, "VAD"),
-  })
-
-  // Init VAD tensors
-  vadSr = new Tensor("int64", [INPUT_SAMPLE_RATE], [])
-  vadState = new Tensor("float32", new Float32Array(2 * 1 * 128), [2, 1, 128])
-
-  fileProgressMap.clear()
-  self.postMessage({ type: "status", status: "loading", message: "Loading Whisper model..." })
-
-  // Load Whisper from onnx-community (public, no auth required)
-  // TODO: Add whisper-tiny-en to R2 for mobile
-  const whisperModel = "onnx-community/whisper-base"
   
-  try {
-    transcriber = await pipeline("automatic-speech-recognition", whisperModel, {
+  if (!sileroVad) {
+    self.postMessage({ type: "status", status: "loading", message: `Loading VAD model (${selectedDevice})...` })
+
+    // Load Silero VAD from onnx-community (public, no auth required)
+    sileroVad = await AutoModel.from_pretrained("onnx-community/silero-vad", {
+      config: { model_type: "custom" },
       dtype: "fp32",
       device: selectedDevice,
-      progress_callback: (progress) => reportProgress(progress, "Whisper"),
+      progress_callback: (progress) => reportProgress(progress, "VAD"),
     })
-  } catch (e) {
-    console.error("[STT Worker] Whisper load failed:", e)
-    self.postMessage({ type: "error", message: `Whisper failed: ${e.message}` })
-    return
+
+    // Init VAD tensors
+    vadSr = new Tensor("int64", [INPUT_SAMPLE_RATE], [])
+    vadState = new Tensor("float32", new Float32Array(2 * 1 * 128), [2, 1, 128])
   }
 
-  // Warm up
-  try {
-    await transcriber(new Float32Array(INPUT_SAMPLE_RATE))
-  } catch (e) {
-    console.error("[STT Worker] Warmup failed:", e)
-    self.postMessage({ type: "error", message: `Warmup failed: ${e.message}` })
-    return
+  if (!transcriber || loadedModelId !== modelId) {
+    transcriber = null
+    fileProgressMap.clear()
+    self.postMessage({ type: "status", status: "loading", message: `Loading Whisper model (${modelId})...` })
+
+    // Map modelId to Hugging Face onnx-community models
+    const modelPaths = {
+      "whisper-tiny.en": "onnx-community/whisper-tiny.en",
+      "whisper-tiny": "onnx-community/whisper-tiny",
+      "whisper-base.en": "onnx-community/whisper-base.en",
+      "whisper-base": "onnx-community/whisper-base",
+      "whisper-small.en": "onnx-community/whisper-small.en",
+      "whisper-small": "onnx-community/whisper-small",
+    }
+    const whisperModel = modelPaths[modelId] || "onnx-community/whisper-base"
+    
+    try {
+      transcriber = await pipeline("automatic-speech-recognition", whisperModel, {
+        dtype: "fp32",
+        device: selectedDevice,
+        progress_callback: (progress) => reportProgress(progress, "Whisper"),
+      })
+      loadedModelId = modelId
+    } catch (e) {
+      console.error("[STT Worker] Whisper load failed:", e)
+      self.postMessage({ type: "error", message: `Whisper failed: ${e.message}` })
+      return
+    }
+
+    // Warm up
+    try {
+      await transcriber(new Float32Array(INPUT_SAMPLE_RATE))
+    } catch (e) {
+      console.error("[STT Worker] Warmup failed:", e)
+      self.postMessage({ type: "error", message: `Warmup failed: ${e.message}` })
+      return
+    }
   }
 
   console.log("[STT Worker] Ready!")
@@ -307,12 +322,12 @@ async function processAudioChunk(buffer) {
 
 // ============ Message Handler ============
 self.onmessage = async (event) => {
-  const { type, buffer } = event.data
+  const { type, buffer, modelId } = event.data
 
   switch (type) {
     case "init":
       try {
-        await loadModels()
+        await loadModels(modelId)
       } catch (err) {
         console.error("[STT Worker] Init error:", err)
         self.postMessage({ type: "error", message: err.toString() })

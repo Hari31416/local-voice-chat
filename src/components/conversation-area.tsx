@@ -59,6 +59,7 @@ export function ConversationArea({
                 initial={{
                   llmId: prefs.llmId,
                   sttEnabled: prefs.sttEnabled,
+                  sttModelId: prefs.sttModelId,
                   ttsEnabled: prefs.ttsEnabled,
                   ttsEngine: prefs.ttsEngine,
                   ttsVoice: prefs.ttsVoice,

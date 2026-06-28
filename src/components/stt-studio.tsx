@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react"
 import { Mic, MicOff, Upload, Copy, Check, FileAudio, AudioLines, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { STT_OPTIONS } from "@/lib/stt-models"
 
 interface STTStudioProps {
   isSttLoaded: boolean
@@ -10,8 +11,9 @@ interface STTStudioProps {
   setSttTranscriptResult: (text: string | null) => void
   sttTranscribing: boolean
   statusMessage: string
-  loadSTTOnly: () => Promise<void>
+  loadSTTOnly: (modelId?: string) => Promise<void>
   transcribeAudioBuffer: (buffer: Float32Array) => void
+  sttModelId?: string
 }
 
 export function STTStudio({
@@ -23,7 +25,15 @@ export function STTStudio({
   statusMessage,
   loadSTTOnly,
   transcribeAudioBuffer,
+  sttModelId = "whisper-base",
 }: STTStudioProps) {
+  const [selectedModelId, setSelectedModelId] = useState(sttModelId)
+
+  useEffect(() => {
+    setSelectedModelId(sttModelId)
+  }, [sttModelId])
+
+  const selectedStt = STT_OPTIONS.find((s) => s.id === selectedModelId) || STT_OPTIONS[3]
   const [recording, setRecording] = useState(false)
   const [copied, setCopied] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -43,7 +53,7 @@ export function STTStudio({
 
   const handleLoadSTT = async () => {
     setLoadingModel(true)
-    await loadSTTOnly()
+    await loadSTTOnly(selectedModelId)
   }
 
   // Resample helper
@@ -192,9 +202,9 @@ export function STTStudio({
       {!isSttLoaded ? (
         <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-8 text-center space-y-4 backdrop-blur-xl">
           <AudioLines className="h-12 w-12 text-zinc-600 mx-auto animate-pulse" />
-          <h2 className="text-lg font-bold text-white">Speech Recognition Model Required</h2>
+          <h2 className="text-lg font-bold text-white">Speech Recognition Model Required ({selectedStt.name})</h2>
           <p className="text-zinc-400 text-xs max-w-sm mx-auto">
-            This module requires downloading local Whisper models (~150MB) and VAD systems to run on-device.
+            This module requires downloading local Whisper model ({selectedStt.sizeLabel}) and VAD systems to run on-device.
           </p>
           {loadingModel || (sttLoadProgress > 0 && sttLoadProgress < 100) ? (
             <div className="max-w-xs mx-auto space-y-2">
@@ -210,18 +220,56 @@ export function STTStudio({
               </div>
             </div>
           ) : (
-            <Button
-              onClick={handleLoadSTT}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-5 rounded-xl text-xs cursor-pointer"
-            >
-              Load Speech Recognition Model
-            </Button>
+              <div className="max-w-xs mx-auto space-y-4">
+                <div className="space-y-1.5 text-left">
+                  <label className="text-zinc-400 text-[10px] uppercase tracking-wider font-semibold">Select Speech Model</label>
+                  <select
+                    value={selectedModelId}
+                    onChange={(e) => setSelectedModelId(e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none cursor-pointer hover:border-zinc-700 focus:border-zinc-600 transition-colors"
+                  >
+                    {STT_OPTIONS.map((opt) => (
+                      <option key={opt.id} value={opt.id} className="bg-zinc-950 text-white">
+                        {opt.name} ({opt.sizeLabel})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <Button
+                  onClick={handleLoadSTT}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-5 rounded-xl text-xs cursor-pointer"
+                >
+                  Load Speech Recognition Model
+                </Button>
+              </div>
           )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Controls Panel */}
-          <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 space-y-6 backdrop-blur-xl">
+            <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 space-y-5 backdrop-blur-xl">
+              {/* Active Speech Model Dropdown */}
+              <div className="space-y-1.5">
+                <label className="text-zinc-400 text-[10px] uppercase tracking-wider font-semibold">Active Speech Model</label>
+                <select
+                  value={selectedModelId}
+                  disabled={sttTranscribing}
+                  onChange={async (e) => {
+                    const val = e.target.value
+                    setSelectedModelId(val)
+                    setLoadingModel(true)
+                    await loadSTTOnly(val)
+                  }}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none cursor-pointer hover:border-zinc-700 focus:border-zinc-600 transition-colors disabled:opacity-50"
+                >
+                  {STT_OPTIONS.map((opt) => (
+                    <option key={opt.id} value={opt.id} className="bg-zinc-950 text-white">
+                      {opt.name} ({opt.sizeLabel})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
             {/* Record Box */}
             <div className="flex flex-col items-center justify-center p-6 bg-zinc-950/40 border border-zinc-850 rounded-xl space-y-4">
               <span className="text-xs text-zinc-400 uppercase tracking-wider font-semibold">Voice Input</span>

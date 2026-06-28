@@ -161,6 +161,7 @@ export default function App() {
             statusMessage={agent.statusMessage}
             loadSTTOnly={agent.loadSTTOnly}
             transcribeAudioBuffer={agent.transcribeAudioBuffer}
+            sttModelId={agent.prefs.sttModelId}
           />
         )}
       </main>
