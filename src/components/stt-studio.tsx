@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react"
-import { Mic, MicOff, Upload, Copy, Check, FileAudio, AudioLines, RefreshCw } from "lucide-react"
+import { Mic, Upload, Copy, Check, FileAudio, AudioLines, RefreshCw, Square } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { STT_OPTIONS } from "@/lib/stt-models"
@@ -323,23 +323,34 @@ export function STTStudio({
                 )}
                 <button
                   type="button"
-                  onClick={recording ? stopRecording : startRecording}
-                  disabled={sttTranscribing}
+                    onClick={startRecording}
+                    disabled={recording || sttTranscribing}
                   className={cn(
                     "h-20 w-20 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl",
                     recording
-                      ? "bg-red-600 text-white hover:bg-red-750"
+                      ? "bg-red-600/60 text-red-300 cursor-not-allowed"
                       : "bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 disabled:opacity-50"
                   )}
                 >
-                  {recording ? <MicOff className="h-8 w-8" /> : <Mic className="h-8 w-8" />}
+                    <Mic className="h-8 w-8" />
                 </button>
               </div>
 
               {recording ? (
-                <div className="flex flex-col items-center gap-1">
-                  <span className="text-xs text-red-500 font-bold animate-pulse">Recording...</span>
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                      <span className="text-xs text-red-400 font-bold tracking-wide">Recording...</span>
+                    </div>
                   <span className="text-sm font-mono text-zinc-300">{formatTime(recordingTime)}</span>
+                    <button
+                      type="button"
+                      onClick={stopRecording}
+                      className="flex items-center gap-2 px-5 py-2 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white text-xs font-bold rounded-full transition-all duration-200 shadow-lg shadow-red-900/40 border border-red-500/50"
+                    >
+                      <Square className="h-3.5 w-3.5 fill-white" />
+                      Stop Recording
+                    </button>
                 </div>
               ) : (
                 <span className="text-xs text-zinc-500">Tap mic to speak</span>
@@ -396,10 +407,24 @@ export function STTStudio({
                   <RefreshCw className="h-8 w-8 text-emerald-400 animate-spin" />
                   <p className="text-xs text-zinc-400 font-semibold">{statusMessage}</p>
                 </div>
-              ) : sttTranscriptResult ? (
-                <div className="flex-1 bg-zinc-950/60 border border-zinc-850 rounded-xl p-3.5 text-sm text-zinc-100 overflow-y-auto leading-relaxed select-text min-h-[180px]">
-                  {sttTranscriptResult}
-                </div>
+              ) : sttTranscriptResult !== null ? (
+                sttTranscriptResult.startsWith('[Error:') ? (
+                  <div className="flex-1 bg-red-950/30 border border-red-800/50 rounded-xl p-3.5 text-sm text-red-300 overflow-y-auto leading-relaxed min-h-[180px] flex flex-col gap-2">
+                    <span className="text-xs font-bold text-red-400 uppercase tracking-wider">Transcription Failed</span>
+                    <p className="text-xs text-red-300/80">{sttTranscriptResult.replace('[Error: ', '').replace(']', '')}</p>
+                    <p className="text-[10px] text-red-500/60 mt-auto">Check the browser console for more details.</p>
+                  </div>
+                ) : sttTranscriptResult.trim() === '' ? (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center p-6 gap-2">
+                    <FileAudio className="h-8 w-8 text-amber-700/60 mb-1" />
+                    <p className="text-xs text-amber-500/80 font-semibold">No speech detected</p>
+                    <p className="text-[10px] text-zinc-500">Try speaking louder or closer to the microphone, or record a longer clip.</p>
+                  </div>
+                ) : (
+                  <div className="flex-1 bg-zinc-950/60 border border-zinc-850 rounded-xl p-3.5 text-sm text-zinc-100 overflow-y-auto leading-relaxed select-text min-h-[180px]">
+                    {sttTranscriptResult}
+                  </div>
+                )
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
                   <FileAudio className="h-8 w-8 text-zinc-700 mb-2" />
@@ -408,7 +433,7 @@ export function STTStudio({
               )}
             </div>
 
-            {sttTranscriptResult && !sttTranscribing && (
+            {sttTranscriptResult !== null && sttTranscriptResult.trim() !== '' && !sttTranscriptResult.startsWith('[Error:') && !sttTranscribing && (
               <div className="flex gap-2 pt-4 border-t border-zinc-850 mt-4">
                 <Button
                   onClick={handleCopy}
@@ -433,6 +458,20 @@ export function STTStudio({
                   }}
                   variant="outline"
                   className="border-zinc-800 text-zinc-500 hover:bg-zinc-800 text-xs py-4 px-4 rounded-xl"
+                >
+                  Clear
+                </Button>
+              </div>
+            )}
+            {sttTranscriptResult !== null && (sttTranscriptResult.trim() === '' || sttTranscriptResult.startsWith('[Error:')) && !sttTranscribing && (
+              <div className="flex justify-end pt-3 border-t border-zinc-850 mt-3">
+                <Button
+                  onClick={() => {
+                    setSttTranscriptResult(null)
+                    setAudioFileName(null)
+                  }}
+                  variant="outline"
+                  className="border-zinc-800 text-zinc-500 hover:bg-zinc-800 text-xs py-2 px-4 rounded-xl"
                 >
                   Clear
                 </Button>

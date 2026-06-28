@@ -559,16 +559,20 @@ export function useVoiceAgent() {
           break
 
         case "transcript_full_result":
-          setSttTranscriptResult(text)
+          console.log('[STT] transcript_full_result received, text:', JSON.stringify(text))
+          // Use a sentinel for empty results so the UI can distinguish
+          // "never ran" (null) from "ran but detected no speech" ("")
+          setSttTranscriptResult(text ?? "")
           setSttTranscribing(false)
           setStatus("ready")
-          setStatusMessage("Transcription complete!")
+          setStatusMessage(text?.trim() ? "Transcription complete!" : "No speech detected")
           break
 
         case "error":
           setStatus("error")
           setStatusMessage(`Error: ${message}`)
           setSttTranscribing(false)
+          setSttTranscriptResult(`[Error: ${message}]`)
           break
       }
     }
@@ -617,7 +621,15 @@ export function useVoiceAgent() {
     setSttTranscribing(true)
     setStatus("transcribing")
     setStatusMessage("Transcribing audio...")
-    workerRef.current?.postMessage({ type: "transcribe_buffer", buffer })
+    if (!workerRef.current) {
+      console.error('[STT] transcribeAudioBuffer: worker is null, cannot transcribe')
+      setSttTranscribing(false)
+      setSttTranscriptResult('[Error: STT worker not available]')
+      return
+    }
+    console.log('[STT] Sending buffer to worker, length:', buffer.length)
+    const copy = buffer.slice()
+    workerRef.current.postMessage({ type: 'transcribe_buffer', buffer: copy }, [copy.buffer])
   }, [initWorker])
 
   const handleSetupStart = useCallback(
