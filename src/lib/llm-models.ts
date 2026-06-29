@@ -57,7 +57,7 @@ export const LLM_MODELS: LLMModel[] = [
     id: 'qwen35-0.8b',
     name: 'Qwen 3.5 0.8B',
     family: 'qwen',
-    capabilities: { text: true, vision: true, thinking: true, streaming: true },
+    capabilities: { text: true, vision: true, thinking: false, streaming: true },
     variants: [
       {
         id: 'qwen35-0.8b',
@@ -65,7 +65,7 @@ export const LLM_MODELS: LLMModel[] = [
         engine: 'transformers-js',
         label: 'Transformers.js',
         engineModelId: 'onnx-community/Qwen3.5-0.8B-ONNX-OPT',
-        capabilities: { text: true, vision: true, thinking: true, streaming: true },
+        capabilities: { text: true, vision: true, thinking: false, streaming: true },
         requirements: ['webgpu', 'mobile-friendly'],
         recommendedFor: ['default', 'mobile', 'vision'],
         sizeMb: 800,
@@ -78,7 +78,7 @@ export const LLM_MODELS: LLMModel[] = [
     id: 'qwen35-2b',
     name: 'Qwen 3.5 2B',
     family: 'qwen',
-    capabilities: { text: true, vision: true, thinking: true, streaming: true },
+    capabilities: { text: true, vision: true, thinking: false, streaming: true },
     variants: [
       {
         id: 'qwen35-2b',
@@ -86,7 +86,7 @@ export const LLM_MODELS: LLMModel[] = [
         engine: 'transformers-js',
         label: 'Transformers.js',
         engineModelId: 'onnx-community/Qwen3.5-2B-ONNX-OPT',
-        capabilities: { text: true, vision: true, thinking: true, streaming: true },
+        capabilities: { text: true, vision: true, thinking: false, streaming: true },
         requirements: ['webgpu', 'high-memory'],
         recommendedFor: ['vision', 'quality'],
         sizeMb: 2048,
@@ -99,7 +99,7 @@ export const LLM_MODELS: LLMModel[] = [
     id: 'qwen35-4b',
     name: 'Qwen 3.5 4B',
     family: 'qwen',
-    capabilities: { text: true, vision: true, thinking: true, streaming: true },
+    capabilities: { text: true, vision: true, thinking: false, streaming: true },
     variants: [
       {
         id: 'qwen35-4b',
@@ -107,7 +107,7 @@ export const LLM_MODELS: LLMModel[] = [
         engine: 'transformers-js',
         label: 'Transformers.js',
         engineModelId: 'onnx-community/Qwen3.5-4B-ONNX-OPT',
-        capabilities: { text: true, vision: true, thinking: true, streaming: true },
+        capabilities: { text: true, vision: true, thinking: false, streaming: true },
         requirements: ['webgpu', 'high-memory'],
         recommendedFor: ['vision', 'quality'],
         sizeMb: 4096,
@@ -127,7 +127,7 @@ export const LLM_MODELS: LLMModel[] = [
         modelId: 'gemma-4-e2b',
         engine: 'gemma4-kernel',
         label: 'Custom kernels',
-        engineModelId: 'gemma-4-e2b-kernel',
+        engineModelId: 'google/gemma-4-E2B-it-qat-mobile-transformers',
         capabilities: { text: true, vision: false, thinking: true, streaming: true },
         requirements: ['webgpu', 'high-memory'],
         recommendedFor: ['default', 'quality'],
@@ -140,7 +140,7 @@ export const LLM_MODELS: LLMModel[] = [
         modelId: 'gemma-4-e2b',
         engine: 'transformers-js',
         label: 'Transformers.js',
-        engineModelId: 'google/gemma-4-E2B-it-qat-mobile-transformers',
+        engineModelId: 'onnx-community/gemma-4-E2B-it-ONNX',
         capabilities: { text: true, vision: true, thinking: true, streaming: true },
         requirements: ['webgpu', 'high-memory'],
         recommendedFor: ['vision', 'quality'],

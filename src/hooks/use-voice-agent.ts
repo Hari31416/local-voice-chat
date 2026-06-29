@@ -12,6 +12,7 @@ import {
   loadLLMVariant,
   streamLLMVariant,
   type LLMRuntimeHandles,
+  type LLMStreamEvent,
   unloadStaleLLMVariant,
 } from "@/lib/llm-runtime"
 import { buildSystemPrompt } from "@/lib/system-prompt"
@@ -284,18 +285,24 @@ export function useVoiceAgent() {
           ? getVoiceProfile(ttsRef.current.engine, ttsRef.current.voice)
           : null
         const systemPrompt = buildSystemPrompt(lastUserText, ttsEnabled, voiceProfile)
-        const maxTokens = getLLMMaxTokens(selectedVariant, ttsEnabled)
+        let maxTokens = getLLMMaxTokens(selectedVariant, ttsEnabled)
+        if (!ttsEnabled && prefsRef.current.useThinking && selectedVariant.capabilities.thinking) {
+          maxTokens = Math.max(maxTokens * 4, 2048)
+        }
 
         let assistantMessage = ''
+        let thinkingMessage = ''
 
-        const updateAssistantMessage = (content: string, metrics?: LLMMetrics) => {
+        const updateAssistantMessage = (content: string, thinking?: string, metrics?: LLMMetrics) => {
           setMessages((prev) => {
             const copy = [...prev]
             if (copy.length > 0 && copy[copy.length - 1].role === 'assistant') {
               const prevMetrics = copy[copy.length - 1].metrics
+              const prevThinking = copy[copy.length - 1].thinking
               copy[copy.length - 1] = {
                 ...copy[copy.length - 1],
                 content,
+                thinking: thinking !== undefined ? thinking : prevThinking,
                 metrics: metrics !== undefined ? metrics : prevMetrics,
               }
             }
@@ -304,40 +311,54 @@ export function useVoiceAgent() {
         }
 
         const streamLLMTextOnly = async (
-          llmStream: AsyncGenerator<string, void, unknown>,
+          llmStream: AsyncGenerator<LLMStreamEvent, void, unknown>,
         ) => {
           const startTime = performance.now()
           let firstTokenTime: number | null = null
           let tokenCount = 0
 
-          for await (const delta of llmStream) {
-            if (!delta) continue
-            if (firstTokenTime === null) {
-              firstTokenTime = performance.now()
+          for await (const event of llmStream) {
+            console.log('[VOICE AGENT EVENT]', JSON.stringify(event))
+            if (event.type === 'text_delta') {
+              const delta = event.text
+              if (!delta) continue
+              if (firstTokenTime === null) {
+                firstTokenTime = performance.now()
+              }
+              tokenCount++
+              assistantMessage += delta
+
+              const timeToFirstTokenMs = firstTokenTime - startTime
+              const durationSinceFirstToken = (performance.now() - firstTokenTime) / 1000
+              const tokensPerSecond = durationSinceFirstToken > 0 ? (tokenCount - 1) / durationSinceFirstToken : 0
+
+              updateAssistantMessage(assistantMessage, thinkingMessage, {
+                timeToFirstTokenMs,
+                tokensPerSecond: tokenCount > 1 ? tokensPerSecond : undefined,
+                totalTokens: tokenCount,
+              })
+            } else if (event.type === 'thinking_delta') {
+              if (prefsRef.current.useThinking) {
+                const delta = event.text
+                if (!delta) continue
+                thinkingMessage += delta
+                updateAssistantMessage(assistantMessage, thinkingMessage)
+              }
             }
-            tokenCount++
-            assistantMessage += delta
-
-            const timeToFirstTokenMs = firstTokenTime - startTime
-            const durationSinceFirstToken = (performance.now() - firstTokenTime) / 1000
-            const tokensPerSecond = durationSinceFirstToken > 0 ? (tokenCount - 1) / durationSinceFirstToken : 0
-
-            updateAssistantMessage(assistantMessage, {
-              timeToFirstTokenMs,
-              tokensPerSecond: tokenCount > 1 ? tokensPerSecond : undefined,
-              totalTokens: tokenCount,
-            })
           }
 
-          if (!assistantMessage.trim()) {
+          if (!assistantMessage.trim() && !thinkingMessage.trim()) {
             throw new Error('LLM returned an empty response')
           }
 
           console.log('[LLM]', assistantMessage)
+          if (thinkingMessage) {
+            console.log('[LLM Thinking]', thinkingMessage)
+          }
         }
 
         const streamLLMWithSentenceTTS = async (
-          llmStream: AsyncGenerator<string, void, unknown>,
+          llmStream: AsyncGenerator<LLMStreamEvent, void, unknown>,
         ) => {
           const splitter = new TextSplitterStream()
           const pcmChunks: Float32Array[] = []
@@ -379,28 +400,39 @@ export function useVoiceAgent() {
           let firstTokenTime: number | null = null
           let tokenCount = 0
 
-          for await (const delta of llmStream) {
-            if (!delta) continue
-            if (firstTokenTime === null) {
-              firstTokenTime = performance.now()
+          for await (const event of llmStream) {
+            console.log('[VOICE AGENT EVENT]', JSON.stringify(event))
+            if (event.type === 'text_delta') {
+              const delta = event.text
+              if (!delta) continue
+              if (firstTokenTime === null) {
+                firstTokenTime = performance.now()
+              }
+              tokenCount++
+              assistantMessage += delta
+              splitter.push(delta)
+
+              const timeToFirstTokenMs = firstTokenTime - startTime
+              const durationSinceFirstToken = (performance.now() - firstTokenTime) / 1000
+              const tokensPerSecond = durationSinceFirstToken > 0 ? (tokenCount - 1) / durationSinceFirstToken : 0
+
+              updateAssistantMessage(assistantMessage, thinkingMessage, {
+                timeToFirstTokenMs,
+                tokensPerSecond: tokenCount > 1 ? tokensPerSecond : undefined,
+                totalTokens: tokenCount,
+              })
+            } else if (event.type === 'thinking_delta') {
+              if (prefsRef.current.useThinking) {
+                const delta = event.text
+                if (!delta) continue
+                thinkingMessage += delta
+                updateAssistantMessage(assistantMessage, thinkingMessage)
+              }
             }
-            tokenCount++
-            assistantMessage += delta
-            splitter.push(delta)
-
-            const timeToFirstTokenMs = firstTokenTime - startTime
-            const durationSinceFirstToken = (performance.now() - firstTokenTime) / 1000
-            const tokensPerSecond = durationSinceFirstToken > 0 ? (tokenCount - 1) / durationSinceFirstToken : 0
-
-            updateAssistantMessage(assistantMessage, {
-              timeToFirstTokenMs,
-              tokensPerSecond: tokenCount > 1 ? tokensPerSecond : undefined,
-              totalTokens: tokenCount,
-            })
           }
           splitter.close()
 
-          if (!assistantMessage.trim()) {
+          if (!assistantMessage.trim() && !thinkingMessage.trim()) {
             throw new Error('LLM returned an empty response')
           }
 
@@ -418,6 +450,7 @@ export function useVoiceAgent() {
                   ...last,
                   audioUrl: url,
                   content: assistantMessage,
+                  thinking: prefsRef.current.useThinking ? thinkingMessage : undefined,
                 }
               }
               return copy
@@ -425,6 +458,9 @@ export function useVoiceAgent() {
           }
 
           console.log('[LLM]', assistantMessage)
+          if (thinkingMessage) {
+            console.log('[LLM Thinking]', thinkingMessage)
+          }
         }
 
         const runLLMStream = ttsEnabled ? streamLLMWithSentenceTTS : streamLLMTextOnly
@@ -702,6 +738,7 @@ export function useVoiceAgent() {
       const newPrefs: UserPreferences = {
         ...selection,
         variantId: selectedId,
+        useThinking: prefsRef.current.useThinking,
         configured: true,
       }
       savePreferences(newPrefs)
@@ -927,6 +964,13 @@ export function useVoiceAgent() {
     prefsRef.current = next
   }, [])
 
+  const setUseThinking = useCallback((enabled: boolean) => {
+    const next = { ...prefsRef.current, useThinking: enabled, configured: true }
+    savePreferences(next)
+    setPrefs(next)
+    prefsRef.current = next
+  }, [])
+
   const clearConversation = useCallback(() => {
     setMessages([])
     setPendingImage(null)
@@ -1004,6 +1048,7 @@ export function useVoiceAgent() {
     textInput,
     setTextInput,
     setHindiTypingEnabled,
+    setUseThinking,
     selectedLLMId: selectedVariantId,
     pendingImage,
     setPendingImage,

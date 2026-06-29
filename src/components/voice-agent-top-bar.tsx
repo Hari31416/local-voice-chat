@@ -15,6 +15,7 @@ interface VoiceAgentTopBarProps {
   tts: ReturnType<typeof useTTS>
   onClearConversation: () => void
   onResetPreferences: () => void
+  onToggleThinking?: (enabled: boolean) => void
 }
 
 export function VoiceAgentTopBar({
@@ -26,6 +27,7 @@ export function VoiceAgentTopBar({
   tts,
   onClearConversation,
   onResetPreferences,
+  onToggleThinking,
 }: VoiceAgentTopBarProps) {
   const [showDebugPanel, setShowDebugPanel] = useState(false)
   const debugPanelRef = useRef<HTMLDivElement | null>(null)
@@ -143,6 +145,17 @@ export function VoiceAgentTopBar({
               ) : (
                 <span className="text-zinc-500">○</span>
               )}
+            </div>
+            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-800">
+              <label className="flex items-center gap-2 cursor-pointer text-zinc-300 hover:text-white select-none">
+                <input
+                  type="checkbox"
+                  checked={prefs.useThinking !== false}
+                  onChange={(e) => onToggleThinking?.(e.target.checked)}
+                  className="rounded border-zinc-750 bg-zinc-900 text-violet-500 focus:ring-violet-500 focus:ring-offset-zinc-900 cursor-pointer h-3.5 w-3.5"
+                />
+                <span>Use model thinking</span>
+              </label>
             </div>
             {setupPhase === "ready" && (
               <button

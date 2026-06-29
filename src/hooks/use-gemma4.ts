@@ -19,11 +19,11 @@ interface ChatMessage {
 type Gemma4Model = {
   generate: (
     messages: any[],
-    options?: { maxNewTokens?: number; signal?: AbortSignal },
+    options?: { maxNewTokens?: number; signal?: AbortSignal;[key: string]: any },
   ) => AsyncGenerator<{ token: number; delta: string; text: string }, void, unknown>
   complete: (
     messages: any[],
-    options?: { maxNewTokens?: number; signal?: AbortSignal },
+    options?: { maxNewTokens?: number; signal?: AbortSignal;[key: string]: any },
   ) => Promise<string>
   dispose?: () => void
 }
@@ -143,7 +143,7 @@ export function useGemma4(options: UseGemma4Options = {}) {
       messages: ChatMessage[],
       systemPrompt?: string,
       _imageDataUrl?: string, // Kept for signature compatibility
-      options?: { maxTokens?: number },
+      options?: { maxTokens?: number; enable_thinking?: boolean; thinking?: boolean },
     ): Promise<string> => {
       const model = modelRef.current
 
@@ -160,6 +160,8 @@ export function useGemma4(options: UseGemma4Options = {}) {
 
         const responseText = await model.complete(chatMessages, {
           maxNewTokens,
+          enable_thinking: options?.enable_thinking ?? true,
+          thinking: options?.thinking ?? true,
         })
 
         const content = extractGemma4Response(responseText)
@@ -184,7 +186,7 @@ export function useGemma4(options: UseGemma4Options = {}) {
       messages: ChatMessage[],
       systemPrompt?: string,
       _imageDataUrl?: string, // Kept for signature compatibility
-      options?: { maxTokens?: number },
+      options?: { maxTokens?: number; enable_thinking?: boolean; thinking?: boolean },
     ): AsyncGenerator<string, void, unknown> {
       const model = modelRef.current
 
@@ -199,21 +201,17 @@ export function useGemma4(options: UseGemma4Options = {}) {
         const chatMessages = formatGemma4Messages(messages, systemPrompt)
         const maxNewTokens = options?.maxTokens ?? 128
 
-        let rawStream = ""
-        let previousCleaned = ""
-
         const stream = model.generate(chatMessages, {
           maxNewTokens,
+          enable_thinking: options?.enable_thinking ?? true,
+          thinking: options?.thinking ?? true,
         })
 
         for await (const chunk of stream) {
           if (abortRef.current) break
-          rawStream += chunk.delta
-          const cleaned = extractGemma4Response(rawStream)
-          const delta = cleaned.slice(previousCleaned.length)
-          previousCleaned = cleaned
-          if (delta) {
-            yield delta
+          if (chunk.delta) {
+            console.log('[GEMMA RAW DELTA]', JSON.stringify(chunk.delta))
+            yield chunk.delta
           }
         }
 

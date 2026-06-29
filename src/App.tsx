@@ -113,6 +113,7 @@ export default function App() {
               tts={agent.tts}
               onClearConversation={agent.clearConversation}
               onResetPreferences={agent.handleResetPreferences}
+              onToggleThinking={agent.setUseThinking}
             />
 
             <ControlBar

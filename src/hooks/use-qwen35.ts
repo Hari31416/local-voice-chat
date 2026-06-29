@@ -1,5 +1,4 @@
 import { useState, useRef, useCallback } from "react"
-import { extractGemma4Response } from "./use-gemma4"
 
 export const QWEN35_MODELS = {
   "qwen35-0.8b": "onnx-community/Qwen3.5-0.8B-ONNX-OPT",
@@ -87,6 +86,8 @@ async function prepareInputs(
   const conversation = buildConversation(messages, systemPrompt, imageDataUrl)
   const prompt = processor.apply_chat_template(conversation, {
     add_generation_prompt: true,
+    enable_thinking: true,
+    thinking: true,
   })
 
   if (imageDataUrl) {
@@ -101,26 +102,7 @@ async function prepareInputs(
   return { inputs, promptLength }
 }
 
-function decodeGeneratedText(
-  processor: LoadedQwen35["processor"],
-  sequences: { slice: (start: null, end: [number, null]) => unknown },
-  promptLength: number,
-  isGemma: boolean,
-  isQwen: boolean,
-): string {
-  const decoded = processor.batch_decode(
-    sequences.slice(null, [promptLength, null]) as Parameters<
-      LoadedQwen35["processor"]["batch_decode"]
-    >[0],
-    {
-      skip_special_tokens: !isGemma && !isQwen,
-    },
-  )
-  const rawText = decoded[0] ?? ""
-  if (isGemma) return extractGemma4Response(rawText)
-  if (isQwen) return extractQwen35Response(rawText)
-  return rawText.trim()
-}
+
 
 async function loadRawImage(dataUrl: string) {
   const { RawImage } = await import("@huggingface/transformers")
@@ -288,15 +270,6 @@ export function useQwen35(options: UseQwen35Options = {}) {
       const maxNewTokens = options?.maxTokens ?? 512
       const system = systemPrompt ?? "You are a helpful assistant."
 
-      const modelId = currentModelRef.current ?? ""
-      const isGemma = modelId.toLowerCase().includes("gemma")
-      const isQwen = modelId.toLowerCase().includes("qwen")
-      const responseExtractor = isGemma
-        ? extractGemma4Response
-        : isQwen
-          ? extractQwen35Response
-          : (t: string) => t.trim()
-
       try {
         const { inputs, promptLength } = await prepareInputs(
           loaded.processor,
@@ -305,8 +278,6 @@ export function useQwen35(options: UseQwen35Options = {}) {
           imageDataUrl,
         )
 
-        let rawStream = ""
-        let previousCleaned = ""
         let streamDone = false
         let streamError: Error | null = null
         let generateResult: GenerateResult | null = null
@@ -318,30 +289,20 @@ export function useQwen35(options: UseQwen35Options = {}) {
           notify = null
         }
 
-        const pushDelta = (cleaned: string) => {
-          const delta = cleaned.slice(previousCleaned.length)
-          previousCleaned = cleaned
-          if (delta) {
-            pending.push(delta)
-            wake()
-          }
-        }
-
         const tokenizer = loaded.processor.tokenizer
         if (!tokenizer) {
           throw new Error("Processor tokenizer unavailable")
         }
 
-        const skipSpecial = !isGemma && !isQwen
         const streamer = new (
           await import("@huggingface/transformers")
         ).TextStreamer(tokenizer, {
           skip_prompt: true,
-          skip_special_tokens: skipSpecial,
+          skip_special_tokens: false,
           callback_function: (token: string) => {
             if (abortRef.current) return
-            rawStream += token
-            pushDelta(responseExtractor(rawStream))
+            pending.push(token)
+            wake()
           },
         })
 
@@ -368,6 +329,7 @@ export function useQwen35(options: UseQwen35Options = {}) {
             wake()
           })
 
+        let yieldedAny = false
         while (!streamDone || pending.length > 0) {
           if (pending.length === 0) {
             await new Promise<void>((resolve) => {
@@ -376,6 +338,7 @@ export function useQwen35(options: UseQwen35Options = {}) {
             if (streamError) throw streamError
             continue
           }
+          yieldedAny = true
           yield pending.shift()!
         }
 
@@ -386,23 +349,20 @@ export function useQwen35(options: UseQwen35Options = {}) {
           return
         }
 
-        pushDelta(responseExtractor(rawStream))
-
         while (pending.length > 0) {
+          yieldedAny = true
           yield pending.shift()!
         }
 
         const sequences = (generateResult as GenerateResult | null)?.sequences
-        if (!previousCleaned && sequences) {
-          const decoded = decodeGeneratedText(
-            loaded.processor,
-            sequences,
-            promptLength || inputs.input_ids?.dims?.at(-1) || 0,
-            isGemma,
-            isQwen,
+        if (!yieldedAny && sequences) {
+          const decoded = loaded.processor.batch_decode(
+            sequences.slice(null, [promptLength, null]),
+            { skip_special_tokens: false }
           )
-          if (decoded) {
-            yield decoded
+          const rawText = decoded[0] ?? ""
+          if (rawText) {
+            yield rawText
           }
         }
 

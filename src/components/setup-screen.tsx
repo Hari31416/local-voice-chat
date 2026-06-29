@@ -66,6 +66,7 @@ export interface SetupSelection {
   ttsVoice: string
   ttsLanguage: TTSLanguage
   hindiTypingEnabled: boolean
+  useThinking: boolean
 }
 
 interface SetupScreenProps {
@@ -101,6 +102,7 @@ export function SetupScreen({
   const [hindiTypingEnabled, setHindiTypingEnabled] = useStateSelection(
     initial.hindiTypingEnabled ?? defaultHindiTypingForLanguage(initial.ttsLanguage),
   )
+  const [useThinking, setUseThinking] = useStateSelection(initial.useThinking ?? true)
 
   const selectedLlm = getLLMOption(variantId)
   const selectedTtsEngine = TTS_ENGINE_OPTIONS.find((o) => o.id === ttsEngine)!
@@ -154,6 +156,19 @@ export function SetupScreen({
             isMobile={isMobile}
             variant="setup"
           />
+          {selectedLlm.capabilities.thinking && (
+            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-zinc-900">
+              <label className="flex items-center gap-2 cursor-pointer text-zinc-300 hover:text-white select-none text-xs">
+                <input
+                  type="checkbox"
+                  checked={useThinking}
+                  onChange={(e) => setUseThinking(e.target.checked)}
+                  className="rounded border-zinc-750 bg-zinc-900 text-violet-500 focus:ring-violet-500 focus:ring-offset-zinc-900 cursor-pointer h-4 w-4"
+                />
+                <span>Enable model thinking / reasoning</span>
+              </label>
+            </div>
+          )}
         </section>
 
         {/* Right Column: Voice I/O & Launch */}
@@ -325,6 +340,7 @@ export function SetupScreen({
                 ttsVoice,
                 ttsLanguage: ttsEngine === 'supertonic' ? ttsLanguage : 'auto',
                 hindiTypingEnabled,
+                useThinking,
               })
             }
             >

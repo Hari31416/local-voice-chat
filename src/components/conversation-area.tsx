@@ -1,3 +1,4 @@
+import { useState } from "react"
 import {
   Conversation,
   ConversationContent,
@@ -10,6 +11,43 @@ import type { ChatMessage, LoadProgress, SetupPhase, VoiceAgentStatus } from "@/
 import { AudioWaveformPlayer } from "@/components/audio-waveform-player"
 import { MessageText } from "@/components/message-text"
 import type { UserPreferences } from "@/lib/user-preferences"
+import { Brain, ChevronDown, ChevronUp } from "lucide-react"
+
+interface ThinkingBlockProps {
+  thinking: string
+  isGenerating: boolean
+}
+
+function ThinkingBlock({ thinking, isGenerating }: ThinkingBlockProps) {
+  const [isExpanded, setIsExpanded] = useState(true)
+
+  return (
+    <div className="w-full border border-zinc-900 bg-zinc-950/40 rounded-lg overflow-hidden mb-2 text-xs select-none">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between px-3 py-2 text-zinc-400 hover:text-zinc-200 transition-colors bg-zinc-900/20 cursor-pointer"
+      >
+        <div className="flex items-center gap-1.5 font-medium">
+          <Brain className={cn("h-3.5 w-3.5 text-purple-400", isGenerating && "animate-pulse")} />
+          <span>Thinking Process</span>
+          {isGenerating && (
+            <span className="h-1.5 w-1.5 rounded-full bg-purple-500 animate-ping ml-1" />
+          )}
+        </div>
+        {isExpanded ? (
+          <ChevronUp className="h-3.5 w-3.5 text-zinc-500" />
+        ) : (
+          <ChevronDown className="h-3.5 w-3.5 text-zinc-500" />
+        )}
+      </button>
+      {isExpanded && (
+        <div className="px-3 py-2 text-zinc-400/90 whitespace-pre-wrap leading-relaxed border-t border-zinc-900/40 bg-zinc-950/20 font-mono text-[11px] max-h-60 overflow-y-auto">
+          {thinking}
+        </div>
+      )}
+    </div>
+  )
+}
 
 interface ConversationAreaProps {
   messages: ChatMessage[]
@@ -66,6 +104,7 @@ export function ConversationArea({
                   ttsVoice: prefs.ttsVoice,
                   ttsLanguage: prefs.ttsLanguage,
                   hindiTypingEnabled: prefs.hindiTypingEnabled,
+                  useThinking: prefs.useThinking,
                 }}
                 isMobile={isMobile}
                 hasSavedConfig={prefs.configured}
@@ -134,6 +173,12 @@ export function ConversationArea({
                         src={msg.image}
                         alt="Uploaded visual context"
                         className="max-h-48 rounded-lg object-contain border border-zinc-800 shadow-md"
+                      />
+                    )}
+                    {msg.role === "assistant" && msg.thinking && prefs.useThinking !== false && (
+                      <ThinkingBlock
+                        thinking={msg.thinking}
+                        isGenerating={isLatestAssistant && agentStatus === "thinking"}
                       />
                     )}
                     {msg.content && (
