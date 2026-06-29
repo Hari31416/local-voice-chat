@@ -122,6 +122,23 @@ async function executeCalculator(
 export const calculatorTool: LLMToolDefinition = {
   name: 'calculator',
   description: 'Evaluate a basic arithmetic expression with +, -, *, /, %, and parentheses.',
+  promptGuidance: {
+    useWhen: [
+      'The user asks you to calculate, compute, or evaluate a numeric expression.',
+      'The user asks for a math result involving +, -, *, /, %, or parentheses.',
+      'The answer requires precise arithmetic — do not do mental math.',
+    ],
+    examples: [
+      {
+        user: 'what is 15% of 240?',
+        toolCall: { name: 'calculator', arguments: { expression: '240 * 0.15' } },
+      },
+      {
+        user: 'calculate (12 + 3) * 4',
+        toolCall: { name: 'calculator', arguments: { expression: '(12 + 3) * 4' } },
+      },
+    ],
+  },
   parameters: {
     type: 'object',
     properties: {

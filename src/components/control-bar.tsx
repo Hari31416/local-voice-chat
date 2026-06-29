@@ -128,7 +128,7 @@ export function ControlBar({
 
   return (
     <div className="fixed bottom-0 left-0 right-0 p-4">
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-4xl mx-auto">
         <div className="bg-zinc-800/95 backdrop-blur-xl rounded-2xl border border-zinc-700/50 p-3 shadow-2xl">
           {isCallActive ? (
             <div className="flex flex-col gap-3">

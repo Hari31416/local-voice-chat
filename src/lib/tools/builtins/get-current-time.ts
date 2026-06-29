@@ -39,6 +39,20 @@ async function executeGetCurrentTime(
 export const getCurrentTimeTool: LLMToolDefinition = {
   name: 'get_current_time',
   description: 'Get the current date and time, optionally in a specific IANA timezone.',
+  promptGuidance: {
+    useWhen: [
+      'The user asks what time it is, the current time, or the date/today.',
+      'The user asks for the time in a city, country, or timezone.',
+      'The user asks what day it is or what the date is.',
+    ],
+    examples: [
+      { user: 'what time is it?', toolCall: { name: 'get_current_time', arguments: {} } },
+      {
+        user: 'what time is it in Tokyo?',
+        toolCall: { name: 'get_current_time', arguments: { timezone: 'Asia/Tokyo' } },
+      },
+    ],
+  },
   parameters: {
     type: 'object',
     properties: {

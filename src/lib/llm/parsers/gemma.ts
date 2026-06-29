@@ -1,5 +1,29 @@
 import { BaseStreamParser } from './index'
 
+const GEMMA_CONTROL_TAG_RE =
+  /<\|?turn>model\s*|<\|?turn>user\s*|<turn\|>\s*|<\|channel>thought\s*|<\|channel>main\s*|<\|channel\|>thought\s*|<\|channel\|>main\s*|<channel\|>thought\s*|<channel\|>main\s*|<\|think\|>\s*/gi
+
+/** Unwrap thinking blocks and strip channel markers, keeping all narrative text. */
+export function unwrapGemmaThinkingAsAnswer(text: string): string {
+  const thinkOpen = '<' + 'think>'
+  const thinkClose = '</' + 'think>'
+  return text
+    .replace(/<think>([\s\S]*?)<\/redacted_thinking>/gi, '$1')
+    .replace(/<thinking>([\s\S]*?)<\/thinking>/gi, '$1')
+    .replace(new RegExp(`${thinkOpen}([\\s\\S]*?)${thinkClose}`, 'g'), '$1')
+    .replace(GEMMA_CONTROL_TAG_RE, '')
+    .replace(/^[\s\n]+/, '')
+}
+
+export class GemmaPlainTextParser extends BaseStreamParser {
+  protected override parse(cleanText: string) {
+    return {
+      text: unwrapGemmaThinkingAsAnswer(cleanText),
+      thinking: '',
+    }
+  }
+}
+
 export class GemmaStreamParser extends BaseStreamParser {
   protected override parse(cleanText: string) {
     const channelRegex = /<\|?channel\|?>(thought|main)?|<\|?think\|?>|<\/?think(ing)?>/gi

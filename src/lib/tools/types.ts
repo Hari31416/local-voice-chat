@@ -19,6 +19,10 @@ export interface LLMToolDefinition {
   name: string
   description: string
   parameters: JSONSchema
+  promptGuidance?: {
+    useWhen: string[]
+    examples?: Array<{ user: string; toolCall: Record<string, unknown> }>
+  }
   execute(input: unknown, context: ToolExecutionContext): Promise<LLMToolResult>
 }
 

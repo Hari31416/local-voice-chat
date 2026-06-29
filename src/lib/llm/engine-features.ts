@@ -1,4 +1,4 @@
-import type { LLMEngineType, LLMModel, LLMVariant } from '@/lib/llm-models'
+import { getLLMModel, type LLMEngineType, type LLMModel, type LLMVariant } from '@/lib/llm-models'
 
 export type LLMEngineFeature = 'nativeThinking' | 'nativeTools'
 
@@ -37,17 +37,53 @@ export function variantHasNativeTools(variant: LLMVariant): boolean {
   return engineHasNativeFeature(variant.engine, 'nativeTools')
 }
 
-export function variantSupportsTools(variant: LLMVariant): boolean {
+function variantFamilySupportsTools(variant: LLMVariant): boolean {
+  const family = getLLMModel(variant.modelId).family
+  return family !== 'lfm' && family !== 'llama'
+}
+
+/** Models that follow tool-call instructions reliably (auto-enabled). */
+export function variantSupportsToolsReliably(variant: LLMVariant): boolean {
+  if (!variantFamilySupportsTools(variant)) return false
+  const model = getLLMModel(variant.modelId)
+  return model.family === 'gemma' && variant.engine === 'transformers-js'
+}
+
+/** Models with tool plumbing but unreliable instruction-following (opt-in). */
+export function variantSupportsToolsExperimental(variant: LLMVariant): boolean {
+  if (!variantFamilySupportsTools(variant)) return false
+  if (variantSupportsToolsReliably(variant)) return false
   return (
     variantHasNativeTools(variant) ||
     variant.engine === 'transformers-js' ||
-    variant.engine === 'gemma4-kernel' ||
-    variant.engine === 'lfm2-kernel'
+    variant.engine === 'gemma4-kernel'
+  )
+}
+
+export function variantSupportsTools(variant: LLMVariant): boolean {
+  return (
+    variantSupportsToolsReliably(variant) ||
+    variantSupportsToolsExperimental(variant)
+  )
+}
+
+export function shouldEnableTools(
+  variant: LLMVariant,
+  experimentalToolsEnabled: boolean,
+): boolean {
+  if (variantSupportsToolsReliably(variant)) return true
+  return experimentalToolsEnabled && variantSupportsToolsExperimental(variant)
+}
+
+export function variantSupportsExperimentalToolsToggle(variant: LLMVariant): boolean {
+  return (
+    variantSupportsToolsExperimental(variant) &&
+    !variantSupportsToolsReliably(variant)
   )
 }
 
 export function variantUsesPromptToolFallback(variant: LLMVariant): boolean {
-  return variantSupportsTools(variant) && !variantHasNativeTools(variant)
+  return shouldEnableTools(variant, true) && !variantHasNativeTools(variant)
 }
 
 export function variantHasParsedTools(variant: LLMVariant): boolean {
@@ -67,4 +103,18 @@ export function getThinkingToggleHint(variant: LLMVariant): string | null {
     return 'Reasoning is parsed from model output tags. Switch to Transformers.js for native reasoning and vision.'
   }
   return null
+}
+
+export function getToolsHint(
+  variant: LLMVariant,
+  experimentalToolsEnabled = false,
+): string | null {
+  if (variantSupportsToolsReliably(variant)) {
+    return 'Calculator and time tools are enabled for this model.'
+  }
+  if (!variantSupportsToolsExperimental(variant)) return null
+  if (experimentalToolsEnabled) {
+    return 'Tool calling is experimental on this model and may not work reliably. Use Gemma 4 with the Transformers.js engine for best results.'
+  }
+  return 'Tools work reliably on Gemma 4 (Transformers.js). Enable below to try experimental tool calling on this model.'
 }

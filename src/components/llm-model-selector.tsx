@@ -13,9 +13,9 @@ import {
 } from "@/lib/llm-models"
 import {
   variantHasNativeThinking,
-  variantHasNativeTools,
   variantHasParsedThinking,
-  variantHasParsedTools,
+  variantSupportsToolsExperimental,
+  variantSupportsToolsReliably,
 } from "@/lib/llm/engine-features"
 import {
   filterLLMModels,
@@ -72,7 +72,7 @@ function EngineFeatureBadges({
           Parsed reasoning
         </span>
       )}
-      {variantHasNativeTools(variant) && (
+      {variantSupportsToolsReliably(variant) && (
         <span
           className={cn(
             "inline-flex items-center gap-0.5 rounded border font-medium",
@@ -81,19 +81,19 @@ function EngineFeatureBadges({
           )}
         >
           {!compact && <Wrench className="h-2.5 w-2.5" />}
-          Native tools
+          Tools
         </span>
       )}
-      {variantHasParsedTools(variant) && (
+      {variantSupportsToolsExperimental(variant) && !variantSupportsToolsReliably(variant) && (
         <span
           className={cn(
             "inline-flex items-center gap-0.5 rounded border font-medium",
             compact ? "px-1 py-0 text-[8px]" : "px-1.5 py-0.5 text-[9px]",
-            "bg-amber-500/10 text-amber-300 border-amber-500/25",
+            "bg-orange-500/10 text-orange-300 border-orange-500/25",
           )}
         >
           {!compact && <Wrench className="h-2.5 w-2.5" />}
-          Prompt tools
+          Experimental tools
         </span>
       )}
     </div>
@@ -285,7 +285,7 @@ function SetupSelector({
   const backendMeta = LLM_BACKEND_META[resolveVariantBackend(selectedId)]
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col min-h-0 flex-1 space-y-3">
       <div className={cn("rounded-xl border bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 p-3", backendMeta.accent)}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -327,7 +327,7 @@ function SetupSelector({
         })}
       </div>
 
-      <div className="space-y-4 max-h-[340px] overflow-y-auto pr-1">
+      <div className="space-y-4 flex-1 min-h-[220px] max-h-[calc(100dvh-13rem)] overflow-y-auto pr-1">
         {groups.length === 0 ? (
           <p className="text-xs text-zinc-500 text-center py-6">No models match this filter.</p>
         ) : (
@@ -473,7 +473,7 @@ export function LLMModelSelector({
 
   if (variant === "setup") {
     return (
-      <div className={className}>
+      <div className={cn("flex flex-col min-h-0 flex-1", className)}>
         <SetupSelector selectedId={selectedId} onSelect={onSelect} isMobile={isMobile} />
       </div>
     )

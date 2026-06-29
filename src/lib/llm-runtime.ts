@@ -7,7 +7,7 @@ import {
   variantSupportsTools,
   variantUsesPromptToolFallback,
 } from '@/lib/llm/engine-features'
-import { buildToolPromptSection } from '@/lib/tools/registry'
+import { buildToolPromptPrefix, buildToolPromptSection } from '@/lib/tools/registry'
 import { executeToolCalls } from '@/lib/tools/execute'
 import type { LLMToolCall, LLMToolResult } from '@/lib/tools/types'
 import { MAX_TOOL_CALLS_PER_ROUND, MAX_TOOL_ROUNDS } from '@/lib/tools/types'
@@ -118,7 +118,9 @@ function buildAiSdkRequest(
   const thinkingEnabled =
     variant.capabilities.thinking && (req.options?.thinkingEnabled ?? false)
   const toolsEnabled =
-    req.options?.toolsEnabled && variantSupportsTools(variant)
+    req.options?.toolsEnabled &&
+    variantSupportsTools(variant) &&
+    getLLMModel(variant.modelId).family !== 'lfm'
 
   return {
     messages: req.messages,
@@ -139,8 +141,12 @@ function augmentSystemPromptForTools(
   if (!toolsEnabled || !variantUsesPromptToolFallback(variant)) {
     return systemPrompt
   }
+  const prefix = buildToolPromptPrefix()
   const toolSection = buildToolPromptSection()
-  return systemPrompt ? `${systemPrompt}\n\n${toolSection}` : toolSection
+  if (systemPrompt) {
+    return `${prefix}\n\n${systemPrompt}\n\n${toolSection}`
+  }
+  return toolSection
 }
 
 async function* streamAiSdkEngine(
@@ -169,7 +175,7 @@ function appendToolTurn(
     const resultText = results.map((result) => formatToolResultForPrompt(result)).join('\n')
     next.push({
       role: 'user',
-      content: `${resultText}\n\nUse the tool result above to answer the user. Do not call the tool again.`,
+      content: `${resultText}\n\nUse the tool result above to answer the user. Do not call the tool again or say you lack real-time access.`,
     })
     return next
   }
@@ -355,8 +361,10 @@ export async function* streamLLMWithToolLoop(
 
     const roundToolCalls: LLMToolCall[] = []
     let hadAnswerText = false
+    // Post-tool rounds: Gemma often answers in the thought channel; disable thinking
+    // so the answer lands in the main text stream instead of the Thinking UI.
     const roundOptions =
-      toolNudgeAttempted && variant.engine === 'transformers-js'
+      round > 0 || toolNudgeAttempted
         ? { ...options, thinkingEnabled: false }
         : options
 
@@ -394,10 +402,11 @@ export async function* streamLLMWithToolLoop(
     }
 
     if (roundToolCalls.length === 0) {
+      const likelyNeedsTool = userMessageLikelyNeedsTool(getLastUserMessage(conversation))
       if (
         !toolNudgeAttempted &&
-        !hadAnswerText &&
-        variantUsesPromptToolFallback(variant)
+        variantUsesPromptToolFallback(variant) &&
+        (!hadAnswerText || likelyNeedsTool)
       ) {
         toolNudgeAttempted = true
         conversation = [
@@ -405,7 +414,7 @@ export async function* streamLLMWithToolLoop(
           {
             role: 'user',
             content:
-              'Output ONLY a ```tool_call fence with valid JSON to call the tool. No reasoning or explanation.',
+              'You must call the appropriate tool now. Output ONLY a ```tool_call fence with valid JSON. Do not explain, refuse, or say you lack real-time access.',
           },
         ]
         imageDataUrl = undefined
@@ -434,4 +443,32 @@ export async function* streamLLMWithToolLoop(
   if (!sawDone) {
     yield { type: 'done' }
   }
+}
+
+function getLastUserMessage(messages: RuntimeMessage[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') return messages[i].content
+  }
+  return ''
+}
+
+function userMessageLikelyNeedsTool(message: string): boolean {
+  const msg = message.toLowerCase().trim()
+  if (!msg) return false
+
+  if (
+    /\b(what('s| is)? (the )?(time|date|day)|current time|what time|time is it)\b/.test(msg) ||
+    /\btime in\b/.test(msg) ||
+    /\btoday('s)? date\b/.test(msg)
+  ) {
+    return true
+  }
+
+  if (
+    /\b(calculate|compute|how much is|what is \d|\d\s*[\+\-\*\/%]|\bpercent\b)/.test(msg)
+  ) {
+    return true
+  }
+
+  return false
 }

@@ -25,6 +25,7 @@ export interface LLMMetrics {
 export interface ChatMessage {
   role: "user" | "assistant"
   content: string
+  createdAt?: number
   thinking?: string
   image?: string
   audioUrl?: string

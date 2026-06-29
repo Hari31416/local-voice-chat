@@ -4,7 +4,10 @@ import { LLMModelSelector } from "@/components/llm-model-selector"
 import { getLLMOption, getLLMVariant } from "@/lib/llm-models"
 import {
   getThinkingToggleHint,
+  getToolsHint,
+  variantSupportsExperimentalToolsToggle,
   variantSupportsThinkingToggle,
+  variantSupportsToolsReliably,
 } from "@/lib/llm/engine-features"
 import { STT_OPTIONS } from "@/lib/stt-models"
 import type { STTModelOption } from "@/lib/stt-models"
@@ -71,6 +74,7 @@ export interface SetupSelection {
   ttsLanguage: TTSLanguage
   hindiTypingEnabled: boolean
   useThinking: boolean
+  experimentalToolsEnabled: boolean
 }
 
 interface SetupScreenProps {
@@ -107,10 +111,14 @@ export function SetupScreen({
     initial.hindiTypingEnabled ?? defaultHindiTypingForLanguage(initial.ttsLanguage),
   )
   const [useThinking, setUseThinking] = useStateSelection(initial.useThinking ?? true)
+  const [experimentalToolsEnabled, setExperimentalToolsEnabled] = useStateSelection(
+    initial.experimentalToolsEnabled ?? false,
+  )
 
   const selectedLlm = getLLMOption(variantId)
   const selectedVariant = getLLMVariant(variantId)
   const thinkingHint = getThinkingToggleHint(selectedVariant)
+  const toolsHint = getToolsHint(selectedVariant, experimentalToolsEnabled)
   const selectedTtsEngine = TTS_ENGINE_OPTIONS.find((o) => o.id === ttsEngine)!
   const voices = ttsEngine === "supertonic" ? SUPERTRONIC_VOICES : PIPER_VOICES
   const selectedVoice = voices.find((v) => v.id === ttsVoice) || voices[0]
@@ -142,8 +150,8 @@ export function SetupScreen({
   })()
 
   return (
-    <div className="text-left space-y-5 max-w-3xl mx-auto w-full">
-      <div className="text-center">
+    <div className="flex flex-col min-h-full flex-1 space-y-4 max-w-4xl mx-auto w-full text-left">
+      <div className="text-center shrink-0">
         <h1 className="text-2xl font-bold text-white mb-1.5 tracking-tight">
           WebVoice
         </h1>
@@ -152,16 +160,18 @@ export function SetupScreen({
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-12 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 flex-1 min-h-0 items-start">
         {/* Left Column: LLM Selection */}
-        <section className="sm:col-span-7 space-y-2.5">
-          <h2 className="text-zinc-300 text-xs font-semibold uppercase tracking-wider">Language model</h2>
-          <LLMModelSelector
-            selectedId={variantId}
-            onSelect={setVariantId}
-            isMobile={isMobile}
-            variant="setup"
-          />
+        <section className="sm:col-span-7 flex flex-col min-h-0 flex-1 space-y-2.5">
+          <h2 className="text-zinc-300 text-xs font-semibold uppercase tracking-wider shrink-0">Language model</h2>
+          <div className="flex flex-col min-h-0 flex-1">
+            <LLMModelSelector
+              selectedId={variantId}
+              onSelect={setVariantId}
+              isMobile={isMobile}
+              variant="setup"
+            />
+          </div>
           {variantSupportsThinkingToggle(selectedVariant) && (
             <div className="flex flex-col gap-1 mt-3 pt-3 border-t border-zinc-900">
               <label className="flex items-center gap-2 cursor-pointer text-zinc-300 hover:text-white select-none text-xs">
@@ -178,10 +188,36 @@ export function SetupScreen({
               )}
             </div>
           )}
+          {(variantSupportsExperimentalToolsToggle(selectedVariant) ||
+            variantSupportsToolsReliably(selectedVariant)) && (
+            <div className="flex flex-col gap-1 mt-3 pt-3 border-t border-zinc-900">
+              {variantSupportsExperimentalToolsToggle(selectedVariant) && (
+                <label className="flex items-center gap-2 cursor-pointer text-zinc-300 hover:text-white select-none text-xs">
+                  <input
+                    type="checkbox"
+                    checked={experimentalToolsEnabled}
+                    onChange={(e) => setExperimentalToolsEnabled(e.target.checked)}
+                    className="rounded border-zinc-750 bg-zinc-900 text-amber-500 focus:ring-amber-500 focus:ring-offset-zinc-900 cursor-pointer h-4 w-4"
+                  />
+                  <span>Enable experimental tool calling</span>
+                </label>
+              )}
+              {toolsHint && (
+                <p
+                  className={cn(
+                    "text-[10px] text-zinc-500",
+                    variantSupportsExperimentalToolsToggle(selectedVariant) && "pl-6",
+                  )}
+                >
+                  {toolsHint}
+                </p>
+              )}
+            </div>
+          )}
         </section>
 
         {/* Right Column: Voice I/O & Launch */}
-        <div className="sm:col-span-5 space-y-4">
+        <div className="sm:col-span-5 space-y-4 sm:sticky sm:top-4">
           <section className="space-y-2">
             <h2 className="text-zinc-300 text-xs font-semibold uppercase tracking-wider">Voice input & output</h2>
             <div className="grid grid-cols-2 gap-1.5">
@@ -350,6 +386,7 @@ export function SetupScreen({
                 ttsLanguage: ttsEngine === 'supertonic' ? ttsLanguage : 'auto',
                 hindiTypingEnabled,
                 useThinking,
+                experimentalToolsEnabled,
               })
             }
             >

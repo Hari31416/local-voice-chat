@@ -15,7 +15,7 @@ import {
   type LLMStreamEvent,
   unloadStaleLLMVariant,
 } from "@/lib/llm-runtime"
-import { variantSupportsTools } from "@/lib/llm/engine-features"
+import { shouldEnableTools } from "@/lib/llm/engine-features"
 import type { LLMToolCall, LLMToolResult } from "@/lib/tools/types"
 import { buildSystemPrompt } from "@/lib/system-prompt"
 import { IS_IOS } from "@/lib/voice-agent-constants"
@@ -278,7 +278,7 @@ export function useVoiceAgent() {
       setStatusMessage("Thinking...")
 
       try {
-        setMessages((prev) => [...prev, { role: 'assistant', content: '' }])
+        setMessages((prev) => [...prev, { role: 'assistant', content: '', createdAt: Date.now() }])
 
         const MAX_HISTORY = IS_IOS ? 4 : 10
         const recentHistory = conversationHistory.slice(-MAX_HISTORY)
@@ -292,7 +292,10 @@ export function useVoiceAgent() {
           ? getVoiceProfile(ttsRef.current.engine, ttsRef.current.voice)
           : null
         const systemPrompt = buildSystemPrompt(lastUserText, ttsEnabled, voiceProfile)
-        const toolsEnabled = variantSupportsTools(selectedVariant)
+        const toolsEnabled = shouldEnableTools(
+          selectedVariant,
+          prefsRef.current.experimentalToolsEnabled,
+        )
         let maxTokens = getLLMMaxTokens(selectedVariant, ttsEnabled)
         if (!ttsEnabled && prefsRef.current.useThinking && selectedVariant.capabilities.thinking) {
           maxTokens = Math.max(maxTokens * 4, 2048)
@@ -329,6 +332,14 @@ export function useVoiceAgent() {
             }
             return copy
           })
+        }
+
+        const promoteThinkingToAnswerIfNeeded = () => {
+          if (toolResults.length > 0 && !assistantMessage.trim() && thinkingMessage.trim()) {
+            assistantMessage = thinkingMessage
+            thinkingMessage = ''
+            updateAssistantMessage(assistantMessage, thinkingMessage, undefined, toolCalls, toolResults)
+          }
         }
 
         const streamLLMTextOnly = async (
@@ -375,6 +386,8 @@ export function useVoiceAgent() {
               updateAssistantMessage(assistantMessage, thinkingMessage, undefined, toolCalls, toolResults)
             }
           }
+
+          promoteThinkingToAnswerIfNeeded()
 
           if (!assistantMessage.trim() && !thinkingMessage.trim() && toolCalls.length === 0) {
             throw new Error('LLM returned an empty response')
@@ -469,6 +482,8 @@ export function useVoiceAgent() {
           }
           splitter.close()
 
+          promoteThinkingToAnswerIfNeeded()
+
           if (!assistantMessage.trim() && !thinkingMessage.trim() && toolCalls.length === 0) {
             throw new Error('LLM returned an empty response')
           }
@@ -562,7 +577,7 @@ export function useVoiceAgent() {
           const pendingText = pendingUserInputRef.current
           pendingUserInputRef.current = null
           console.debug("[Voice] Processing pending input:", pendingText)
-          const userMessage: ChatMessage = { role: "user", content: pendingText }
+          const userMessage: ChatMessage = { role: "user", content: pendingText, createdAt: Date.now() }
           setMessages((prev) => [...prev, userMessage])
           setTimeout(() => {
             handleLLMResponse([...messagesRef.current, userMessage])
@@ -700,7 +715,7 @@ export function useVoiceAgent() {
               return
             }
 
-            const userMessage: ChatMessage = { role: "user", content: text.trim() }
+            const userMessage: ChatMessage = { role: "user", content: text.trim(), createdAt: Date.now() }
             setMessages((prev) => [...prev, userMessage])
             handleLLMResponse([...messagesRef.current, userMessage])
           }
@@ -786,7 +801,8 @@ export function useVoiceAgent() {
       const newPrefs: UserPreferences = {
         ...selection,
         variantId: selectedId,
-        useThinking: prefsRef.current.useThinking,
+        useThinking: selection.useThinking,
+        experimentalToolsEnabled: selection.experimentalToolsEnabled,
         configured: true,
       }
       savePreferences(newPrefs)
@@ -998,6 +1014,7 @@ export function useVoiceAgent() {
       role: "user",
       content: textInput.trim(),
       image: pendingImage || undefined,
+      createdAt: Date.now(),
     }
     setMessages((prev) => [...prev, userMessage])
     handleLLMResponse([...messagesRef.current, userMessage])
@@ -1014,6 +1031,13 @@ export function useVoiceAgent() {
 
   const setUseThinking = useCallback((enabled: boolean) => {
     const next = { ...prefsRef.current, useThinking: enabled, configured: true }
+    savePreferences(next)
+    setPrefs(next)
+    prefsRef.current = next
+  }, [])
+
+  const setExperimentalToolsEnabled = useCallback((enabled: boolean) => {
+    const next = { ...prefsRef.current, experimentalToolsEnabled: enabled, configured: true }
     savePreferences(next)
     setPrefs(next)
     prefsRef.current = next
@@ -1097,6 +1121,7 @@ export function useVoiceAgent() {
     setTextInput,
     setHindiTypingEnabled,
     setUseThinking,
+    setExperimentalToolsEnabled,
     selectedLLMId: selectedVariantId,
     pendingImage,
     setPendingImage,

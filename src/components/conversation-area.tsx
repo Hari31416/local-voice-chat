@@ -12,6 +12,7 @@ import { AudioWaveformPlayer } from "@/components/audio-waveform-player"
 import { MessageText } from "@/components/message-text"
 import type { UserPreferences } from "@/lib/user-preferences"
 import { ToolActivity } from "@/components/tool-activity"
+import { MessageMeta } from "@/components/message-meta"
 import { Brain, ChevronDown, ChevronUp } from "lucide-react"
 
 interface ThinkingBlockProps {
@@ -78,19 +79,23 @@ export function ConversationArea({
   onResetPreferences,
 }: ConversationAreaProps) {
   return (
-    <Conversation className="flex-1 pb-32">
+    <Conversation className={cn("flex-1", setupPhase !== "selecting" && "pb-32")}>
       <ConversationContent
         className={cn(
-          messages.length === 0 ? 'min-h-full flex flex-col justify-center' : 'pt-16',
-          setupPhase === 'selecting' && messages.length === 0 ? 'max-w-3xl' : 'max-w-2xl',
-          'mx-auto w-full'
+          messages.length === 0 && setupPhase !== "selecting" && "min-h-full flex flex-col justify-center",
+          messages.length === 0 && setupPhase === "selecting" && "min-h-full flex flex-col justify-start py-4",
+          setupPhase === "selecting" && messages.length === 0 ? "max-w-4xl" : "max-w-4xl px-2 sm:px-4",
+          messages.length > 0 && "pt-16",
+          "mx-auto w-full h-full",
         )}
       >
         {messages.length === 0 ? (
           <div
             className={cn(
-              'text-center py-10 mx-auto w-full',
-              setupPhase === 'selecting' ? 'max-w-3xl' : 'max-w-xl'
+              "mx-auto w-full",
+              setupPhase === "selecting"
+                ? "min-h-full flex flex-col"
+                : "max-w-xl text-center py-10",
             )}
           >
             {setupPhase === 'selecting' ? (
@@ -106,6 +111,7 @@ export function ConversationArea({
                   ttsLanguage: prefs.ttsLanguage,
                   hindiTypingEnabled: prefs.hindiTypingEnabled,
                   useThinking: prefs.useThinking,
+                  experimentalToolsEnabled: prefs.experimentalToolsEnabled,
                 }}
                 isMobile={isMobile}
                 hasSavedConfig={prefs.configured}
@@ -165,8 +171,8 @@ export function ConversationArea({
                 <Message key={i} from={msg.role === "user" ? "user" : "assistant"}>
                   <div
                     className={cn(
-                      "flex flex-col gap-1.5 max-w-[80%]",
-                      msg.role === "user" ? "items-end" : "items-start",
+                      "flex flex-col gap-1.5 w-fit max-w-[92%]",
+                      msg.role === "user" ? "items-end ml-auto" : "items-start",
                     )}
                   >
                     {msg.image && (
@@ -190,10 +196,11 @@ export function ConversationArea({
                       />
                     )}
                     {msg.content && (
+                    <>
                     <MessageContent
                       variant="contained"
                       className={cn(
-                        "max-w-none flex flex-col gap-2",
+                        "flex flex-col gap-2",
                         (msg.audioUrl || isSpeakingThis) && "min-w-[280px] xs:min-w-[320px] sm:min-w-[380px]"
                       )}
                     >
@@ -209,25 +216,13 @@ export function ConversationArea({
                         />
                       )}
                     </MessageContent>
-                  )}
-                  {msg.role === "assistant" && msg.metrics && (
-                    <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-500/80 font-mono select-none mt-1.5 px-1.5">
-                      {msg.metrics.totalTokens !== undefined && (
-                        <span>{msg.metrics.totalTokens} tok</span>
-                      )}
-                      {msg.metrics.totalTokens !== undefined && msg.metrics.timeToFirstTokenMs !== undefined && (
-                        <span className="text-zinc-700/60 font-sans">·</span>
-                      )}
-                      {msg.metrics.timeToFirstTokenMs !== undefined && (
-                        <span>TTFT {Math.round(msg.metrics.timeToFirstTokenMs)} ms</span>
-                      )}
-                      {msg.metrics.timeToFirstTokenMs !== undefined && msg.metrics.tokensPerSecond !== undefined && (
-                        <span className="text-zinc-700/60 font-sans">·</span>
-                      )}
-                      {msg.metrics.tokensPerSecond !== undefined && (
-                        <span>{msg.metrics.tokensPerSecond.toFixed(1)} tok/s</span>
-                      )}
-                    </div>
+                    <MessageMeta
+                      content={msg.content}
+                      createdAt={msg.createdAt}
+                      align={msg.role === "user" ? "right" : "left"}
+                      metrics={msg.role === "assistant" ? msg.metrics : undefined}
+                    />
+                    </>
                   )}
                 </div>
               </Message>

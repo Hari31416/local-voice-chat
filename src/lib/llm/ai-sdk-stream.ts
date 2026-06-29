@@ -15,6 +15,11 @@ import {
   ToolCallStreamParser,
   normalizeToolCallInput,
 } from './parsers/tools'
+import { unwrapGemmaThinkingAsAnswer } from './parsers/gemma'
+import {
+  isLfmOnnxModel,
+  streamLfmTransformersToEvents,
+} from './lfm-transformers'
 
 export type AiSdkStreamRequest = {
   messages: RuntimeMessage[]
@@ -165,7 +170,10 @@ function sanitizeThinkingDelta(text: string): string {
 }
 
 /** Strip thinking blocks that leak into the answer channel. */
-function sanitizeAnswerDelta(text: string): string {
+function sanitizeAnswerDelta(text: string, thinkingEnabled = true): string {
+  if (!thinkingEnabled) {
+    return unwrapGemmaThinkingAsAnswer(text)
+  }
   return text
     .replace(/<think>[\s\S]*?<\/redacted_thinking>/gi, '')
     .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
@@ -183,6 +191,11 @@ export async function* streamAiSdkToEvents(
   req: AiSdkStreamRequest,
   abortSignal?: AbortSignal,
 ): AsyncGenerator<LLMStreamEvent, void, unknown> {
+  if (provider === 'transformers-js' && isLfmOnnxModel(model.modelId)) {
+    yield* streamLfmTransformersToEvents(model, req, abortSignal)
+    return
+  }
+
   const thinkingEnabled = req.thinkingEnabled ?? false
   const toolsEnabled = req.toolsEnabled ?? false
   const baseModel = model as unknown as LanguageModel
@@ -225,12 +238,12 @@ export async function* streamAiSdkToEvents(
         for (const call of toolCalls) {
           yield { type: 'tool_call', call }
         }
-        const cleaned = sanitizeAnswerDelta(text)
+        const cleaned = sanitizeAnswerDelta(text, thinkingEnabled)
         if (cleaned) {
           yield { type: 'text_delta', text: cleaned }
         }
       } else {
-        const cleaned = sanitizeAnswerDelta(part.text)
+        const cleaned = sanitizeAnswerDelta(part.text, thinkingEnabled)
         if (cleaned) {
           yield { type: 'text_delta', text: cleaned }
         }
@@ -265,7 +278,7 @@ export async function* streamAiSdkToEvents(
           yield { type: 'tool_call', call }
         }
         if (text) {
-          const cleaned = sanitizeAnswerDelta(text)
+          const cleaned = sanitizeAnswerDelta(text, thinkingEnabled)
           if (cleaned) {
             yield { type: 'text_delta', text: cleaned }
           }

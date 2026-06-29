@@ -5,6 +5,7 @@ import {
   streamAiSdkToEvents,
   type AiSdkStreamRequest,
 } from '@/lib/llm/ai-sdk-stream'
+import { isLfmOnnxModel, patchLfmTransformersChatTemplate } from '@/lib/llm/lfm-transformers'
 import type { LLMStreamEvent } from '@/lib/llm/parsers'
 
 export const QWEN35_MODELS = {
@@ -89,6 +90,9 @@ export function useQwen35(options: UseQwen35Options = {}) {
 
         modelRef.current = model
         currentModelRef.current = modelId
+        if (isLfmOnnxModel(modelId)) {
+          patchLfmTransformersChatTemplate(model)
+        }
         setCurrentModel(modelId)
         setLoadProgress(100)
         updateStatus('ready')

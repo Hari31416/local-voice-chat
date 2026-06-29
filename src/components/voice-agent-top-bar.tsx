@@ -6,10 +6,14 @@ import { IS_IOS } from "@/lib/voice-agent-constants"
 import { getLLMVariant } from "@/lib/llm-models"
 import {
   getThinkingToggleHint,
+  getToolsHint,
+  variantSupportsExperimentalToolsToggle,
   variantSupportsThinkingToggle,
+  variantSupportsToolsReliably,
 } from "@/lib/llm/engine-features"
 import type { DebugInfo, SetupPhase } from "@/lib/voice-agent-types"
 import type { UserPreferences } from "@/lib/user-preferences"
+import { cn } from "@/lib/utils"
 
 interface VoiceAgentTopBarProps {
   hasMessages: boolean
@@ -22,6 +26,7 @@ interface VoiceAgentTopBarProps {
   onClearConversation: () => void
   onResetPreferences: () => void
   onToggleThinking?: (enabled: boolean) => void
+  onToggleExperimentalTools?: (enabled: boolean) => void
 }
 
 export function VoiceAgentTopBar({
@@ -35,13 +40,18 @@ export function VoiceAgentTopBar({
   onClearConversation,
   onResetPreferences,
   onToggleThinking,
+  onToggleExperimentalTools,
 }: VoiceAgentTopBarProps) {
   const [showDebugPanel, setShowDebugPanel] = useState(false)
   const debugPanelRef = useRef<HTMLDivElement | null>(null)
   const debugToggleRef = useRef<HTMLButtonElement | null>(null)
   const selectedVariant = getLLMVariant(selectedVariantId)
   const thinkingHint = getThinkingToggleHint(selectedVariant)
+  const toolsHint = getToolsHint(selectedVariant, prefs.experimentalToolsEnabled)
   const showThinkingToggle = variantSupportsThinkingToggle(selectedVariant)
+  const showExperimentalToolsToggle = variantSupportsExperimentalToolsToggle(selectedVariant)
+  const showToolsInfo =
+    variantSupportsToolsReliably(selectedVariant) || showExperimentalToolsToggle
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -169,6 +179,31 @@ export function VoiceAgentTopBar({
                 </label>
                 {thinkingHint && (
                   <p className="text-[10px] text-zinc-500 pl-5">{thinkingHint}</p>
+                )}
+              </div>
+            )}
+            {showToolsInfo && (
+              <div className="flex flex-col gap-1 mt-2 pt-2 border-t border-zinc-800">
+                {showExperimentalToolsToggle && (
+                  <label className="flex items-center gap-2 cursor-pointer text-zinc-300 hover:text-white select-none">
+                    <input
+                      type="checkbox"
+                      checked={prefs.experimentalToolsEnabled === true}
+                      onChange={(e) => onToggleExperimentalTools?.(e.target.checked)}
+                      className="rounded border-zinc-750 bg-zinc-900 text-amber-500 focus:ring-amber-500 focus:ring-offset-zinc-900 cursor-pointer h-3.5 w-3.5"
+                    />
+                    <span>Experimental tool calling</span>
+                  </label>
+                )}
+                {toolsHint && (
+                  <p
+                    className={cn(
+                      "text-[10px] text-zinc-500",
+                      showExperimentalToolsToggle && "pl-5",
+                    )}
+                  >
+                    {toolsHint}
+                  </p>
                 )}
               </div>
             )}

@@ -115,6 +115,7 @@ export default function App() {
               onClearConversation={agent.clearConversation}
               onResetPreferences={agent.handleResetPreferences}
               onToggleThinking={agent.setUseThinking}
+              onToggleExperimentalTools={agent.setExperimentalToolsEnabled}
             />
 
             <ControlBar

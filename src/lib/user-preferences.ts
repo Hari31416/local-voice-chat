@@ -18,6 +18,8 @@ export interface UserPreferences {
   /** Roman → Devanagari typing in the message box (Lipilekhika). */
   hindiTypingEnabled: boolean
   useThinking: boolean
+  /** Opt-in for tool calling on models that don't follow tool instructions reliably. */
+  experimentalToolsEnabled: boolean
   configured: boolean
 }
 
@@ -32,6 +34,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   ttsLanguage: "auto",
   hindiTypingEnabled: false,
   useThinking: true,
+  experimentalToolsEnabled: false,
   configured: false,
 }
 
@@ -65,6 +68,7 @@ function normalizePreferences(partial: Partial<UserPreferences>): UserPreference
     ttsLanguage: partial.ttsLanguage ?? "auto",
     hindiTypingEnabled: partial.hindiTypingEnabled === true,
     useThinking: partial.useThinking !== false,
+    experimentalToolsEnabled: partial.experimentalToolsEnabled === true,
     configured: partial.configured === true,
   }
 }
