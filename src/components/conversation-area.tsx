@@ -156,6 +156,25 @@ export function ConversationArea({
                       )}
                     </MessageContent>
                   )}
+                  {msg.role === "assistant" && msg.metrics && (
+                    <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-500/80 font-mono select-none mt-1.5 px-1.5">
+                      {msg.metrics.totalTokens !== undefined && (
+                        <span>{msg.metrics.totalTokens} tok</span>
+                      )}
+                      {msg.metrics.totalTokens !== undefined && msg.metrics.timeToFirstTokenMs !== undefined && (
+                        <span className="text-zinc-700/60 font-sans">·</span>
+                      )}
+                      {msg.metrics.timeToFirstTokenMs !== undefined && (
+                        <span>TTFT {Math.round(msg.metrics.timeToFirstTokenMs)} ms</span>
+                      )}
+                      {msg.metrics.timeToFirstTokenMs !== undefined && msg.metrics.tokensPerSecond !== undefined && (
+                        <span className="text-zinc-700/60 font-sans">·</span>
+                      )}
+                      {msg.metrics.tokensPerSecond !== undefined && (
+                        <span>{msg.metrics.tokensPerSecond.toFixed(1)} tok/s</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </Message>
             )

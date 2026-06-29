@@ -10,6 +10,7 @@ import { IS_IOS } from "@/lib/voice-agent-constants"
 import {
   type ChatMessage,
   type DebugInfo,
+  type LLMMetrics,
   type LoadProgress,
   type SetupPhase,
   type VoiceAgentStatus,
@@ -260,11 +261,16 @@ export function useVoiceAgent() {
 
         let assistantMessage = ''
 
-        const updateAssistantMessage = (content: string) => {
+        const updateAssistantMessage = (content: string, metrics?: LLMMetrics) => {
           setMessages((prev) => {
             const copy = [...prev]
             if (copy.length > 0 && copy[copy.length - 1].role === 'assistant') {
-              copy[copy.length - 1] = { ...copy[copy.length - 1], content }
+              const prevMetrics = copy[copy.length - 1].metrics
+              copy[copy.length - 1] = {
+                ...copy[copy.length - 1],
+                content,
+                metrics: metrics !== undefined ? metrics : prevMetrics,
+              }
             }
             return copy
           })
@@ -273,9 +279,27 @@ export function useVoiceAgent() {
         const streamLLMTextOnly = async (
           llmStream: AsyncGenerator<string, void, unknown>,
         ) => {
+          const startTime = performance.now()
+          let firstTokenTime: number | null = null
+          let tokenCount = 0
+
           for await (const delta of llmStream) {
+            if (!delta) continue
+            if (firstTokenTime === null) {
+              firstTokenTime = performance.now()
+            }
+            tokenCount++
             assistantMessage += delta
-            updateAssistantMessage(assistantMessage)
+
+            const timeToFirstTokenMs = firstTokenTime - startTime
+            const durationSinceFirstToken = (performance.now() - firstTokenTime) / 1000
+            const tokensPerSecond = durationSinceFirstToken > 0 ? (tokenCount - 1) / durationSinceFirstToken : 0
+
+            updateAssistantMessage(assistantMessage, {
+              timeToFirstTokenMs,
+              tokensPerSecond: tokenCount > 1 ? tokensPerSecond : undefined,
+              totalTokens: tokenCount,
+            })
           }
 
           if (!assistantMessage.trim()) {
@@ -324,10 +348,28 @@ export function useVoiceAgent() {
             }
           })()
 
+          const startTime = performance.now()
+          let firstTokenTime: number | null = null
+          let tokenCount = 0
+
           for await (const delta of llmStream) {
+            if (!delta) continue
+            if (firstTokenTime === null) {
+              firstTokenTime = performance.now()
+            }
+            tokenCount++
             assistantMessage += delta
             splitter.push(delta)
-            updateAssistantMessage(assistantMessage)
+
+            const timeToFirstTokenMs = firstTokenTime - startTime
+            const durationSinceFirstToken = (performance.now() - firstTokenTime) / 1000
+            const tokensPerSecond = durationSinceFirstToken > 0 ? (tokenCount - 1) / durationSinceFirstToken : 0
+
+            updateAssistantMessage(assistantMessage, {
+              timeToFirstTokenMs,
+              tokensPerSecond: tokenCount > 1 ? tokensPerSecond : undefined,
+              totalTokens: tokenCount,
+            })
           }
           splitter.close()
 

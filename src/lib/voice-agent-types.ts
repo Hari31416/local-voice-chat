@@ -14,11 +14,18 @@ export type VoiceAgentStatus =
 
 export type SetupPhase = "selecting" | "loading" | "ready"
 
+export interface LLMMetrics {
+  timeToFirstTokenMs?: number
+  tokensPerSecond?: number
+  totalTokens?: number
+}
+
 export interface ChatMessage {
   role: "user" | "assistant"
   content: string
   image?: string
   audioUrl?: string
+  metrics?: LLMMetrics
 }
 
 export interface DebugInfo {
