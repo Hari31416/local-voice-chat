@@ -1,10 +1,11 @@
 import {
   DEFAULT_LLM_ID,
-  getLLMOption as getCatalogLLMOption,
+  getLLMModel as getCatalogLLMModel,
   hasLLMCapability,
   type LLMBackend,
   type LLMEngineType,
-  type LLMOption,
+  type LLMModel,
+  type LLMVariant,
 } from "@/lib/llm-models"
 
 export type LLMFilter = "all" | "recommended" | "vision" | "thinking" | "light" | "mobile"
@@ -50,8 +51,6 @@ export const LLM_FILTER_OPTIONS: { id: LLMFilter; label: string }[] = [
 
 const BACKEND_ORDER: LLMBackend[] = ["qwen35", "gemma4", "lfm2", "webllm"]
 
-const MOBILE_MAX_SIZE_MB = 1536 // ~1.5 GB — typical mobile tab memory limit
-
 export const LLM_ENGINE_META: Record<LLMEngineType, { label: string; description: string }> = {
   "transformers-js": {
     label: "Transformers.js",
@@ -77,38 +76,46 @@ export function parseModelSizeMB(sizeLabel: string): number {
   return value
 }
 
-/** Models likely to run on mobile browsers without crashing the tab. */
-export function isMobileFriendlyModel(opt: LLMOption): boolean {
-  return opt.sizeMb < MOBILE_MAX_SIZE_MB || opt.requirements.includes("mobile-friendly")
+export function isMobileFriendlyModel(model: LLMModel): boolean {
+  return model.variants.some((v) => v.sizeMb < 1536 || v.requirements.includes("mobile-friendly"))
 }
 
-export function isHeavyForMobile(opt: LLMOption, isMobile: boolean): boolean {
+export function isHeavyForMobile(model: LLMModel, isMobile: boolean): boolean {
   if (!isMobile) return false
-  return !isMobileFriendlyModel(opt)
+  return !isMobileFriendlyModel(model)
 }
 
-export function matchesLLMFilter(opt: LLMOption, filter: LLMFilter, _isMobile: boolean): boolean {
+export function matchesLLMFilter(model: LLMModel, filter: LLMFilter, _isMobile: boolean): boolean {
   switch (filter) {
     case "recommended":
-      return isRecommendedLLM(opt) || opt.recommendedFor.includes("mobile") || opt.recommendedFor.includes("vision")
+      return (
+        model.id === DEFAULT_LLM_ID ||
+        model.variants.some((v) => v.recommendedFor.includes("default") || v.recommendedFor.includes("mobile"))
+      )
     case "vision":
-      return hasLLMCapability(opt, "vision")
+      return hasLLMCapability(model, "vision")
     case "thinking":
-      return hasLLMCapability(opt, "thinking")
+      return hasLLMCapability(model, "thinking")
     case "light":
-      return opt.sizeMb < 1024
+      return model.variants.some((v) => v.sizeMb < 1024)
     case "mobile":
-      return isMobileFriendlyModel(opt)
+      return isMobileFriendlyModel(model)
     default:
       return true
   }
 }
 
-export function groupLLMOptions(options: LLMOption[]): { backend: LLMBackend; opts: LLMOption[] }[] {
-  const map = new Map<LLMBackend, LLMOption[]>()
-  for (const opt of options) {
-    if (!map.has(opt.backend)) map.set(opt.backend, [])
-    map.get(opt.backend)!.push(opt)
+export function groupLLMModels(models: LLMModel[]): { backend: LLMBackend; opts: LLMModel[] }[] {
+  const map = new Map<LLMBackend, LLMModel[]>()
+  for (const model of models) {
+    const primaryVariant = model.variants[0]
+    let backend: LLMBackend = 'webllm'
+    if (primaryVariant.engine === 'gemma4-kernel') backend = 'gemma4'
+    else if (primaryVariant.engine === 'lfm2-kernel') backend = 'lfm2'
+    else if (primaryVariant.engine === 'transformers-js') backend = 'qwen35'
+
+    if (!map.has(backend)) map.set(backend, [])
+    map.get(backend)!.push(model)
   }
   return BACKEND_ORDER.filter((b) => map.has(b)).map((backend) => ({
     backend,
@@ -116,40 +123,34 @@ export function groupLLMOptions(options: LLMOption[]): { backend: LLMBackend; op
   }))
 }
 
-export function filterLLMOptions(
-  options: LLMOption[],
+export function filterLLMModels(
+  models: LLMModel[],
   filter: LLMFilter,
   isMobile: boolean,
-): LLMOption[] {
-  return options.filter((opt) => matchesLLMFilter(opt, filter, isMobile))
+): LLMModel[] {
+  return models.filter((model) => matchesLLMFilter(model, filter, isMobile))
 }
 
-export function getLLMOption(id: string): LLMOption {
-  return getCatalogLLMOption(id)
+export function getLLMModel(id: string): LLMModel {
+  return getCatalogLLMModel(id)
 }
 
-export function isRecommendedLLM(opt: LLMOption): boolean {
-  return opt.id === DEFAULT_LLM_ID
+export function isRecommendedLLM(model: LLMModel): boolean {
+  return model.id === DEFAULT_LLM_ID
 }
 
-export function sizeBarPercent(sizeLabel: string): number {
-  const mb = parseModelSizeMB(sizeLabel)
-  return Math.min(100, Math.round((mb / 4096) * 100))
+export function sizeBarPercentForVariant(variant: LLMVariant): number {
+  return Math.min(100, Math.round((variant.sizeMb / 4096) * 100))
 }
 
-export function sizeBarPercentForOption(opt: LLMOption): number {
-  return Math.min(100, Math.round((opt.sizeMb / 4096) * 100))
-}
-
-export function getCapabilityLabels(opt: LLMOption): string[] {
+export function getCapabilityLabels(model: LLMModel): string[] {
   const labels = ["Text"]
-  if (hasLLMCapability(opt, "vision")) labels.push("Vision")
-  if (hasLLMCapability(opt, "thinking")) labels.push("Thinking")
+  if (hasLLMCapability(model, "vision")) labels.push("Vision")
+  if (hasLLMCapability(model, "thinking")) labels.push("Thinking")
   return labels
 }
 
-export function getModelSubtitle(opt: LLMOption): string {
-  const engine = LLM_ENGINE_META[opt.engineType].label
-  const suffix = opt.variantLabel ? ` · ${opt.variantLabel}` : ""
-  return `${engine}${suffix}`
+export function getModelSubtitle(variant: LLMVariant): string {
+  const engine = LLM_ENGINE_META[variant.engine].label
+  return engine
 }

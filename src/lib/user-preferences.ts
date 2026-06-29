@@ -1,4 +1,4 @@
-import { DEFAULT_LLM_ID, LLM_OPTIONS } from "@/lib/llm-models"
+import { DEFAULT_LLM_ID, DEFAULT_VARIANT_ID, LLM_MODELS, getLLMModel, selectBestVariantForModel } from "@/lib/llm-models"
 import { DEFAULT_STT_ID, STT_OPTIONS } from "@/lib/stt-models"
 import type { TTSEngine, TTSLanguage } from "@/lib/tts-types"
 import { getDefaultVoiceForEngine, getPiperVoice, getSupertonicVoice } from "@/lib/tts-voices"
@@ -8,6 +8,7 @@ const LEGACY_LLM_KEY = "voice_agent_selected_model"
 
 export interface UserPreferences {
   llmId: string
+  variantId: string
   sttEnabled: boolean
   sttModelId: string
   ttsEnabled: boolean
@@ -21,6 +22,7 @@ export interface UserPreferences {
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
   llmId: DEFAULT_LLM_ID,
+  variantId: DEFAULT_VARIANT_ID,
   sttEnabled: true,
   sttModelId: DEFAULT_STT_ID,
   ttsEnabled: true,
@@ -36,7 +38,12 @@ export function defaultHindiTypingForLanguage(language: TTSLanguage): boolean {
 }
 
 function normalizePreferences(partial: Partial<UserPreferences>): UserPreferences {
-  const llmId = LLM_OPTIONS.some((o) => o.id === partial.llmId) ? partial.llmId! : DEFAULT_LLM_ID
+  const llmId = LLM_MODELS.some((m) => m.id === partial.llmId) ? partial.llmId! : DEFAULT_LLM_ID
+  const model = getLLMModel(llmId)
+  const variantId = (partial.variantId && model.variants.some((v) => v.id === partial.variantId))
+    ? partial.variantId!
+    : selectBestVariantForModel(model).id
+
   const sttModelId = STT_OPTIONS.some((o) => o.id === partial.sttModelId) ? partial.sttModelId! : DEFAULT_STT_ID
   const ttsEngine: TTSEngine = partial.ttsEngine === "piper" ? "piper" : "supertonic"
   const defaultVoice = getDefaultVoiceForEngine(ttsEngine)
@@ -47,6 +54,7 @@ function normalizePreferences(partial: Partial<UserPreferences>): UserPreference
 
   return {
     llmId,
+    variantId,
     sttEnabled: partial.sttEnabled !== false,
     sttModelId,
     ttsEnabled: partial.ttsEnabled !== false,
@@ -91,3 +99,4 @@ export function clearPreferences(): void {
   localStorage.removeItem(STORAGE_KEY)
   localStorage.removeItem(LEGACY_LLM_KEY)
 }
+

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { LLMModelSelector } from "@/components/llm-model-selector"
-import { getLLMOption } from "@/lib/llm-models"
+import { getLLMOption, getLLMVariant } from "@/lib/llm-models"
 import { STT_OPTIONS } from "@/lib/stt-models"
 import type { STTModelOption } from "@/lib/stt-models"
 import type { TTSEngine, TTSLanguage } from "@/lib/tts-types"
@@ -58,6 +58,7 @@ const SUPERTRONIC_LANGUAGES: { id: TTSLanguage; label: string }[] = [
 
 export interface SetupSelection {
   llmId: string
+  variantId: string
   sttEnabled: boolean
   sttModelId: string
   ttsEnabled: boolean
@@ -90,7 +91,7 @@ export function SetupScreen({
   onStart,
   onReset,
 }: SetupScreenProps) {
-  const [llmId, setLlmId] = useStateSelection(initial.llmId)
+  const [variantId, setVariantId] = useStateSelection(initial.variantId || initial.llmId)
   const [sttEnabled, setSttEnabled] = useStateSelection(initial.sttEnabled)
   const [sttModelId, setSttModelId] = useStateSelection(initial.sttModelId)
   const [ttsEnabled, setTtsEnabled] = useStateSelection(initial.ttsEnabled)
@@ -101,7 +102,7 @@ export function SetupScreen({
     initial.hindiTypingEnabled ?? defaultHindiTypingForLanguage(initial.ttsLanguage),
   )
 
-  const selectedLlm = getLLMOption(llmId)
+  const selectedLlm = getLLMOption(variantId)
   const selectedTtsEngine = TTS_ENGINE_OPTIONS.find((o) => o.id === ttsEngine)!
   const voices = ttsEngine === "supertonic" ? SUPERTRONIC_VOICES : PIPER_VOICES
   const selectedVoice = voices.find((v) => v.id === ttsVoice) || voices[0]
@@ -148,8 +149,8 @@ export function SetupScreen({
         <section className="sm:col-span-7 space-y-2.5">
           <h2 className="text-zinc-300 text-xs font-semibold uppercase tracking-wider">Language model</h2>
           <LLMModelSelector
-            selectedId={llmId}
-            onSelect={setLlmId}
+            selectedId={variantId}
+            onSelect={setVariantId}
             isMobile={isMobile}
             variant="setup"
           />
@@ -313,18 +314,19 @@ export function SetupScreen({
           <div className="flex gap-2">
             <Button
               className="flex-1 bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs py-2 h-9 rounded-lg transition-colors cursor-pointer"
-              onClick={() =>
-                onStart({
-                  llmId,
-                  sttEnabled,
-                  sttModelId,
-                  ttsEnabled,
-                  ttsEngine,
-                  ttsVoice,
-                  ttsLanguage: ttsEngine === 'supertonic' ? ttsLanguage : 'auto',
-                  hindiTypingEnabled,
-                })
-              }
+            onClick={() =>
+              onStart({
+                llmId: getLLMVariant(variantId).modelId,
+                variantId,
+                sttEnabled,
+                sttModelId,
+                ttsEnabled,
+                ttsEngine,
+                ttsVoice,
+                ttsLanguage: ttsEngine === 'supertonic' ? ttsLanguage : 'auto',
+                hindiTypingEnabled,
+              })
+            }
             >
               {hasSavedConfig ? 'Load & start' : 'Load models'}
             </Button>

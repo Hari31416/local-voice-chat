@@ -58,6 +58,7 @@ export function ConversationArea({
               <SetupScreen
                 initial={{
                   llmId: prefs.llmId,
+                  variantId: prefs.variantId,
                   sttEnabled: prefs.sttEnabled,
                   sttModelId: prefs.sttModelId,
                   ttsEnabled: prefs.ttsEnabled,

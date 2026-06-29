@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react"
+import { extractGemma4Response } from "./use-gemma4"
 
 export const QWEN35_MODELS = {
   "qwen35-0.8b": "onnx-community/Qwen3.5-0.8B-ONNX-OPT",
@@ -6,7 +7,7 @@ export const QWEN35_MODELS = {
   "qwen35-4b": "onnx-community/Qwen3.5-4B-ONNX-OPT",
 } as const
 
-export type Qwen35ModelId = (typeof QWEN35_MODELS)[keyof typeof QWEN35_MODELS]
+export type Qwen35ModelId = string
 
 export type Qwen35Status = "idle" | "loading" | "ready" | "generating" | "error"
 
@@ -21,15 +22,9 @@ interface ChatMessage {
 }
 
 type LoadedQwen35 = {
-  processor: Awaited<ReturnType<typeof import("@huggingface/transformers")["AutoProcessor"]["from_pretrained"]>>
-  model: Awaited<
-    ReturnType<
-      typeof import("@huggingface/transformers")["Qwen3_5ForConditionalGeneration"]["from_pretrained"]
-    >
-  >
-  stoppingCriteria: InstanceType<
-    typeof import("@huggingface/transformers")["InterruptableStoppingCriteria"]
-  >
+  processor: any
+  model: any
+  stoppingCriteria: any
 }
 
 type GenerateResult = {
@@ -110,16 +105,21 @@ function decodeGeneratedText(
   processor: LoadedQwen35["processor"],
   sequences: { slice: (start: null, end: [number, null]) => unknown },
   promptLength: number,
+  isGemma: boolean,
+  isQwen: boolean,
 ): string {
   const decoded = processor.batch_decode(
     sequences.slice(null, [promptLength, null]) as Parameters<
       LoadedQwen35["processor"]["batch_decode"]
     >[0],
     {
-      skip_special_tokens: true,
+      skip_special_tokens: !isGemma && !isQwen,
     },
   )
-  return extractQwen35Response(decoded[0] ?? "")
+  const rawText = decoded[0] ?? ""
+  if (isGemma) return extractGemma4Response(rawText)
+  if (isQwen) return extractQwen35Response(rawText)
+  return rawText.trim()
 }
 
 async function loadRawImage(dataUrl: string) {
@@ -165,16 +165,16 @@ export function useQwen35(options: UseQwen35Options = {}) {
 
   const [status, setStatus] = useState<Qwen35Status>("idle")
   const [loadProgress, setLoadProgress] = useState(0)
-  const [currentModel, setCurrentModel] = useState<Qwen35ModelId | null>(null)
+  const [currentModel, setCurrentModel] = useState<string | null>(null)
 
   const loadedRef = useRef<LoadedQwen35 | null>(null)
-  const currentModelRef = useRef<Qwen35ModelId | null>(null)
+  const currentModelRef = useRef<string | null>(null)
   const loadingRef = useRef(false)
   const abortRef = useRef(false)
 
   const updateStatus = useCallback(
     (newStatus: Qwen35Status) => {
-      console.debug("[Qwen35] Status:", newStatus)
+      console.debug("[TransformersEngine] Status:", newStatus)
       setStatus(newStatus)
       onStatusChange?.(newStatus)
     },
@@ -182,7 +182,7 @@ export function useQwen35(options: UseQwen35Options = {}) {
   )
 
   const loadModel = useCallback(
-    async (modelId: Qwen35ModelId): Promise<boolean> => {
+    async (modelId: string): Promise<boolean> => {
       if (loadingRef.current) return false
       if (loadedRef.current && currentModelRef.current === modelId) {
         return true
@@ -202,6 +202,8 @@ export function useQwen35(options: UseQwen35Options = {}) {
         const {
           AutoProcessor,
           Qwen3_5ForConditionalGeneration,
+          Gemma4ForConditionalGeneration,
+          AutoModelForCausalLM,
           InterruptableStoppingCriteria,
         } = transformers
 
@@ -213,15 +215,33 @@ export function useQwen35(options: UseQwen35Options = {}) {
           progress_callback: createPhaseProgressHandler(onProgress, 0, 20),
         })
 
-        const model = await Qwen3_5ForConditionalGeneration.from_pretrained(modelId, {
-          dtype: {
-            embed_tokens: "q4",
-            vision_encoder: "fp16",
-            decoder_model_merged: "q4",
-          },
-          device: "webgpu",
-          progress_callback: createPhaseProgressHandler(onProgress, 20, 80),
-        })
+        const isQwen35 = modelId.toLowerCase().includes("qwen3.5")
+        const isGemma4 = modelId.toLowerCase().includes("gemma-4")
+
+        let model
+        if (isQwen35) {
+          model = await Qwen3_5ForConditionalGeneration.from_pretrained(modelId, {
+            dtype: {
+              embed_tokens: "q4",
+              vision_encoder: "fp16",
+              decoder_model_merged: "q4",
+            },
+            device: "webgpu",
+            progress_callback: createPhaseProgressHandler(onProgress, 20, 80),
+          })
+        } else if (isGemma4) {
+          model = await Gemma4ForConditionalGeneration.from_pretrained(modelId, {
+            dtype: "q4f16",
+            device: "webgpu",
+            progress_callback: createPhaseProgressHandler(onProgress, 20, 80),
+          })
+        } else {
+          model = await AutoModelForCausalLM.from_pretrained(modelId, {
+            dtype: "q4",
+            device: "webgpu",
+            progress_callback: createPhaseProgressHandler(onProgress, 20, 80),
+          })
+        }
 
         loadedRef.current = {
           processor,
@@ -232,10 +252,10 @@ export function useQwen35(options: UseQwen35Options = {}) {
         setCurrentModel(modelId)
         setLoadProgress(100)
         updateStatus("ready")
-        console.log(`[Qwen35] Model ${modelId} loaded successfully`)
+        console.log(`[TransformersEngine] Model ${modelId} loaded successfully`)
         return true
       } catch (error) {
-        console.error("[Qwen35] Load error:", error)
+        console.error("[TransformersEngine] Load error:", error)
         loadedRef.current = null
         currentModelRef.current = null
         setCurrentModel(null)
@@ -258,7 +278,7 @@ export function useQwen35(options: UseQwen35Options = {}) {
     ): AsyncGenerator<string, void, unknown> {
       const loaded = loadedRef.current
       if (!loaded) {
-        throw new Error("Qwen 3.5 not loaded")
+        throw new Error("Model not loaded")
       }
 
       updateStatus("generating")
@@ -267,6 +287,15 @@ export function useQwen35(options: UseQwen35Options = {}) {
 
       const maxNewTokens = options?.maxTokens ?? 512
       const system = systemPrompt ?? "You are a helpful assistant."
+
+      const modelId = currentModelRef.current ?? ""
+      const isGemma = modelId.toLowerCase().includes("gemma")
+      const isQwen = modelId.toLowerCase().includes("qwen")
+      const responseExtractor = isGemma
+        ? extractGemma4Response
+        : isQwen
+          ? extractQwen35Response
+          : (t: string) => t.trim()
 
       try {
         const { inputs, promptLength } = await prepareInputs(
@@ -300,18 +329,19 @@ export function useQwen35(options: UseQwen35Options = {}) {
 
         const tokenizer = loaded.processor.tokenizer
         if (!tokenizer) {
-          throw new Error("Qwen 3.5 processor tokenizer unavailable")
+          throw new Error("Processor tokenizer unavailable")
         }
 
+        const skipSpecial = !isGemma && !isQwen
         const streamer = new (
           await import("@huggingface/transformers")
         ).TextStreamer(tokenizer, {
           skip_prompt: true,
-          skip_special_tokens: false,
+          skip_special_tokens: skipSpecial,
           callback_function: (token: string) => {
             if (abortRef.current) return
             rawStream += token
-            pushDelta(extractQwen35Response(rawStream))
+            pushDelta(responseExtractor(rawStream))
           },
         })
 
@@ -327,7 +357,7 @@ export function useQwen35(options: UseQwen35Options = {}) {
             stopping_criteria: loaded.stoppingCriteria,
             return_dict_in_generate: true,
           })
-          .then((result) => {
+          .then((result: unknown) => {
             generateResult = result as GenerateResult
             streamDone = true
             wake()
@@ -356,7 +386,7 @@ export function useQwen35(options: UseQwen35Options = {}) {
           return
         }
 
-        pushDelta(extractQwen35Response(rawStream))
+        pushDelta(responseExtractor(rawStream))
 
         while (pending.length > 0) {
           yield pending.shift()!
@@ -368,6 +398,8 @@ export function useQwen35(options: UseQwen35Options = {}) {
             loaded.processor,
             sequences,
             promptLength || inputs.input_ids?.dims?.at(-1) || 0,
+            isGemma,
+            isQwen,
           )
           if (decoded) {
             yield decoded
@@ -380,7 +412,7 @@ export function useQwen35(options: UseQwen35Options = {}) {
           updateStatus("ready")
           return
         }
-        console.error("[Qwen35] Stream error:", error)
+        console.error("[TransformersEngine] Stream error:", error)
         updateStatus("error")
         throw error
       }
@@ -421,3 +453,4 @@ export function useQwen35(options: UseQwen35Options = {}) {
     unload,
   }
 }
+

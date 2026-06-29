@@ -5,14 +5,14 @@ import { useGemma4 } from "@/hooks/use-gemma4"
 import { useWebLLM } from "@/hooks/use-webllm"
 import { useLfm2 } from "@/hooks/use-lfm2"
 import { useQwen35 } from "@/hooks/use-qwen35"
-import { DEFAULT_LLM_ID, getLLMMaxTokens, getLLMOption } from "@/lib/llm-models"
+import { DEFAULT_VARIANT_ID, getLLMVariant, getLLMOption, getLLMMaxTokens } from "@/lib/llm-models"
 import {
-  abortLLMOption,
-  getLLMLoadProgress,
-  loadLLMOption,
-  streamLLMOption,
+  abortLLMVariant,
+  getLLMVariantLoadProgress,
+  loadLLMVariant,
+  streamLLMVariant,
   type LLMRuntimeHandles,
-  unloadStaleLLMOption,
+  unloadStaleLLMVariant,
 } from "@/lib/llm-runtime"
 import { buildSystemPrompt } from "@/lib/system-prompt"
 import { IS_IOS } from "@/lib/voice-agent-constants"
@@ -76,8 +76,8 @@ export function useVoiceAgent() {
   const [isMicActive, setIsMicActive] = useState(false)
   const [isMicMuted, setIsMicMuted] = useState(false)
   const [textInput, setTextInput] = useState("")
-  const [selectedLLMId, setSelectedLLMId] = useState<string>(
-    () => loadPreferences().llmId || DEFAULT_LLM_ID,
+  const [selectedVariantId, setSelectedVariantId] = useState<string>(
+    () => loadPreferences().variantId || DEFAULT_VARIANT_ID,
   )
   const [pendingImage, setPendingImage] = useState<string | null>(null)
   const [sttLoadProgress, setSttLoadProgress] = useState(0)
@@ -182,7 +182,7 @@ export function useVoiceAgent() {
   const lfm2Ref = useRef(lfm2)
   const qwen35Ref = useRef(qwen35)
   const ttsRef = useRef(tts)
-  const selectedLLMIdRef = useRef(selectedLLMId)
+  const selectedVariantIdRef = useRef(selectedVariantId)
   const prefsRef = useRef(prefs)
   const setupPhaseRef = useRef(setupPhase)
 
@@ -192,10 +192,10 @@ export function useVoiceAgent() {
     lfm2Ref.current = lfm2
     qwen35Ref.current = qwen35
     ttsRef.current = tts
-    selectedLLMIdRef.current = selectedLLMId
+    selectedVariantIdRef.current = selectedVariantId
     prefsRef.current = prefs
     setupPhaseRef.current = setupPhase
-  }, [gemma4, webllm, lfm2, qwen35, tts, selectedLLMId, prefs, setupPhase])
+  }, [gemma4, webllm, lfm2, qwen35, tts, selectedVariantId, prefs, setupPhase])
 
   const getLLMHandles = useCallback(
     (): LLMRuntimeHandles => ({
@@ -207,8 +207,9 @@ export function useVoiceAgent() {
     [],
   )
 
-  const selectedOption = getLLMOption(selectedLLMId)
-  const llmLoadProgress = getLLMLoadProgress(selectedOption, getLLMHandles())
+  const selectedVariant = getLLMVariant(selectedVariantId)
+  const selectedOption = getLLMOption(selectedVariantId)
+  const llmLoadProgress = getLLMVariantLoadProgress(selectedVariant, getLLMHandles())
 
   const activeLoadProgress: LoadProgress | null =
     prefs.sttEnabled && !debugInfo.sttLoaded
@@ -276,13 +277,14 @@ export function useVoiceAgent() {
         const chatMessages = recentHistory.map((m) => ({ role: m.role, content: m.content }))
         const lastUserText =
           [...recentHistory].reverse().find((m) => m.role === 'user')?.content ?? ''
-        const option = getLLMOption(selectedLLMIdRef.current)
+        const selectedVariant = getLLMVariant(selectedVariantIdRef.current)
+        const option = getLLMOption(selectedVariantIdRef.current)
         const ttsEnabled = prefsRef.current.ttsEnabled
         const voiceProfile = ttsEnabled
           ? getVoiceProfile(ttsRef.current.engine, ttsRef.current.voice)
           : null
         const systemPrompt = buildSystemPrompt(lastUserText, ttsEnabled, voiceProfile)
-        const maxTokens = getLLMMaxTokens(option, ttsEnabled)
+        const maxTokens = getLLMMaxTokens(selectedVariant, ttsEnabled)
 
         let assistantMessage = ''
 
@@ -433,8 +435,8 @@ export function useVoiceAgent() {
 
         const lastUserMsg = [...recentHistory].reverse().find((m) => m.role === 'user')
         await runLLMStream(
-          streamLLMOption(
-            option,
+          streamLLMVariant(
+            selectedVariant,
             getLLMHandles(),
             chatMessages,
             systemPrompt,
@@ -492,13 +494,14 @@ export function useVoiceAgent() {
   )
 
   const loadLlm = useCallback(async (): Promise<boolean> => {
-    const selectedId = selectedLLMIdRef.current
+    const selectedId = selectedVariantIdRef.current
+    const selectedVariant = getLLMVariant(selectedId)
     const option = getLLMOption(selectedId)
     let llmReady = false
 
     try {
       setStatusMessage(`Loading ${option.name} LLM (${option.sizeLabel}) via ${option.engineType}...`)
-      llmReady = await loadLLMOption(option, getLLMHandles())
+      llmReady = await loadLLMVariant(selectedVariant, getLLMHandles())
     } catch (error) {
       console.error("[Voice] LLM load error:", error)
     }
@@ -605,7 +608,7 @@ export function useVoiceAgent() {
               console.debug("[Voice] Interrupting - new user input")
               abortControllerRef.current?.abort()
 
-              abortLLMOption(getLLMOption(selectedLLMIdRef.current), getLLMHandles())
+              abortLLMVariant(getLLMVariant(selectedVariantIdRef.current), getLLMHandles())
               if (prefsRef.current.ttsEnabled) {
                 tts.stop()
               }
@@ -695,15 +698,17 @@ export function useVoiceAgent() {
 
   const handleSetupStart = useCallback(
     (selection: SetupSelection) => {
+      const selectedId = selection.variantId || DEFAULT_VARIANT_ID
       const newPrefs: UserPreferences = {
         ...selection,
+        variantId: selectedId,
         configured: true,
       }
       savePreferences(newPrefs)
       setPrefs(newPrefs)
       prefsRef.current = newPrefs
-      setSelectedLLMId(selection.llmId)
-      selectedLLMIdRef.current = selection.llmId
+      setSelectedVariantId(selectedId)
+      selectedVariantIdRef.current = selectedId
       setSetupPhase("loading")
       if (selection.ttsEnabled) {
         tts.preparePlayback()
@@ -714,28 +719,34 @@ export function useVoiceAgent() {
   )
 
   const switchLLM = useCallback(
-    async (newModelId: string) => {
-      if (newModelId === selectedLLMIdRef.current) return
+    async (newVariantId: string) => {
+      if (newVariantId === selectedVariantIdRef.current) return
 
-      setSelectedLLMId(newModelId)
-      selectedLLMIdRef.current = newModelId
-      savePreferences({ ...prefsRef.current, llmId: newModelId, configured: true })
+      setSelectedVariantId(newVariantId)
+      selectedVariantIdRef.current = newVariantId
+      const newVariant = getLLMVariant(newVariantId)
+      savePreferences({
+        ...prefsRef.current,
+        llmId: newVariant.modelId,
+        variantId: newVariantId,
+        configured: true,
+      })
 
       if (!debugInfo.llmLoaded && status !== "ready" && status !== "error") {
         return
       }
 
       setStatus("loading")
-      setDebugInfo((prev) => ({ ...prev, llmLoaded: false, llmMode: newModelId }))
+      setDebugInfo((prev) => ({ ...prev, llmLoaded: false, llmMode: newVariantId }))
 
-      const oldOption = getLLMOption(selectedLLMId)
-      const newOption = getLLMOption(newModelId)
+      const oldVariant = getLLMVariant(selectedVariantId)
+      const newOption = getLLMOption(newVariantId)
 
-      await unloadStaleLLMOption(oldOption, newOption, getLLMHandles())
+      await unloadStaleLLMVariant(oldVariant, newVariant, getLLMHandles())
 
       try {
         setStatusMessage(`Loading ${newOption.name} LLM (${newOption.sizeLabel}) via ${newOption.engineType}...`)
-        const llmReady = await loadLLMOption(newOption, getLLMHandles())
+        const llmReady = await loadLLMVariant(newVariant, getLLMHandles())
 
         if (!llmReady) {
           setStatus("error")
@@ -752,7 +763,7 @@ export function useVoiceAgent() {
         setStatusMessage(`LLM failed to load: ${err instanceof Error ? err.message : String(err)}`)
       }
     },
-    [selectedLLMId, status, debugInfo.llmLoaded, getLLMHandles],
+    [selectedVariantId, status, debugInfo.llmLoaded, getLLMHandles],
   )
 
   const handleImageSelect = useCallback(async (file: File) => {
@@ -835,7 +846,7 @@ export function useVoiceAgent() {
 
   const endCall = useCallback(() => {
     abortControllerRef.current?.abort()
-    abortLLMOption(getLLMOption(selectedLLMIdRef.current), getLLMHandles())
+    abortLLMVariant(getLLMVariant(selectedVariantIdRef.current), getLLMHandles())
     abortControllerRef.current = null
     isProcessingRef.current = false
 
@@ -874,8 +885,8 @@ export function useVoiceAgent() {
     const resetPrefs = { ...DEFAULT_PREFERENCES }
     setPrefs(resetPrefs)
     prefsRef.current = resetPrefs
-    setSelectedLLMId(DEFAULT_LLM_ID)
-    selectedLLMIdRef.current = DEFAULT_LLM_ID
+    setSelectedVariantId(DEFAULT_VARIANT_ID)
+    selectedVariantIdRef.current = DEFAULT_VARIANT_ID
     setSetupPhase("selecting")
     setStatus("idle")
     setStatusMessage("Choose your models to begin")
@@ -883,7 +894,7 @@ export function useVoiceAgent() {
     setDebugInfo((prev) => ({
       webgpu: prev.webgpu,
       sttBackend: "unknown",
-      llmMode: DEFAULT_LLM_ID,
+      llmMode: DEFAULT_VARIANT_ID,
       vadLoaded: false,
       sttLoaded: false,
       ttsLoaded: false,
@@ -993,7 +1004,7 @@ export function useVoiceAgent() {
     textInput,
     setTextInput,
     setHindiTypingEnabled,
-    selectedLLMId,
+    selectedLLMId: selectedVariantId,
     pendingImage,
     setPendingImage,
     debugInfo,

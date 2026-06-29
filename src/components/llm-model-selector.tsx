@@ -1,19 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Brain, Camera, Check, ChevronDown, Cpu, Sparkles, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import type { LLMOption } from "@/lib/llm-models"
-import { hasLLMCapability, LLM_OPTIONS } from "@/lib/llm-models"
 import {
-  filterLLMOptions,
+  LLM_MODELS,
+  getLLMModel,
+  getLLMVariant,
+  hasLLMCapability,
+  type LLMModel,
+} from "@/lib/llm-models"
+import {
+  filterLLMModels,
   getModelSubtitle,
-  getLLMOption,
-  groupLLMOptions,
+  groupLLMModels,
   isHeavyForMobile,
   isRecommendedLLM,
   LLM_BACKEND_META,
-  LLM_ENGINE_META,
   LLM_FILTER_OPTIONS,
-  sizeBarPercentForOption,
+  sizeBarPercentForVariant,
   type LLMFilter,
 } from "@/lib/llm-model-ui"
 import { cn } from "@/lib/utils"
@@ -28,16 +31,16 @@ interface LLMModelSelectorProps {
 }
 
 function ModelBadges({
-  opt,
+  model,
   isMobile,
   compact = false,
 }: {
-  opt: LLMOption
+  model: LLMModel
   isMobile: boolean
   compact?: boolean
 }) {
-  const heavy = isHeavyForMobile(opt, isMobile)
-  const recommended = isRecommendedLLM(opt)
+  const heavy = isHeavyForMobile(model, isMobile)
+  const recommended = isRecommendedLLM(model)
 
   return (
     <div className={cn("flex flex-wrap items-center gap-1", compact && "gap-0.5")}>
@@ -53,7 +56,7 @@ function ModelBadges({
           Default
         </span>
       )}
-      {hasLLMCapability(opt, "vision") && (
+      {hasLLMCapability(model, "vision") && (
         <span
           className={cn(
             "inline-flex items-center gap-0.5 rounded border font-medium",
@@ -65,7 +68,7 @@ function ModelBadges({
           Vision
         </span>
       )}
-      {hasLLMCapability(opt, "thinking") && (
+      {hasLLMCapability(model, "thinking") && (
         <span
           className={cn(
             "inline-flex items-center gap-0.5 rounded border font-medium",
@@ -93,45 +96,56 @@ function ModelBadges({
 }
 
 function ModelCard({
-  opt,
-  selected,
+  model,
+  selectedId,
   isMobile,
   onSelect,
   compact = false,
 }: {
-  opt: LLMOption
-  selected: boolean
+  model: LLMModel
+  selectedId: string
   isMobile: boolean
-  onSelect: () => void
+  onSelect: (variantId: string) => void
   compact?: boolean
 }) {
-  const meta = LLM_BACKEND_META[opt.backend]
-  const bar = sizeBarPercentForOption(opt)
+  const isSelected = model.variants.some((v) => v.id === selectedId)
+  const activeVariant = model.variants.find((v) => v.id === selectedId) || model.variants[0]
+  
+  // Use backend meta of the first variant or selected variant
+  const primaryVariant = model.variants[0]
+  let backend: typeof LLM_BACKEND_META[keyof typeof LLM_BACKEND_META] = LLM_BACKEND_META.webllm
+  if (primaryVariant.engine === 'gemma4-kernel') backend = LLM_BACKEND_META.gemma4
+  else if (primaryVariant.engine === 'lfm2-kernel') backend = LLM_BACKEND_META.lfm2
+  else if (primaryVariant.engine === 'transformers-js') backend = LLM_BACKEND_META.qwen35
+
+  const bar = sizeBarPercentForVariant(activeVariant)
 
   return (
-    <button
-      type="button"
-      onClick={onSelect}
+    <div
+      onClick={() => {
+        if (!isSelected) {
+          onSelect(model.variants[0].id)
+        }
+      }}
       className={cn(
-        "group w-full text-left rounded-xl border transition-all duration-150 cursor-pointer",
-        compact ? "p-2" : "p-3",
-        selected
-          ? cn("ring-1 ring-violet-400/40 shadow-lg shadow-violet-950/20", meta.accent)
+        "group w-full text-left rounded-xl border transition-all duration-150 cursor-pointer p-3",
+        isSelected
+          ? cn("ring-1 ring-violet-400/40 shadow-lg shadow-violet-950/20 bg-zinc-900/90", backend.accent)
           : "bg-zinc-900/50 border-zinc-800 hover:border-zinc-600 hover:bg-zinc-900/80",
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-center gap-2">
-            <span className={cn("font-semibold text-white truncate", compact ? "text-[11px]" : "text-sm")}>
-              {opt.name}
+            <span className={cn("font-semibold text-white truncate text-sm")}>
+              {model.name}
             </span>
-            {selected && <Check className="h-3.5 w-3.5 text-violet-300 flex-shrink-0" />}
+            {isSelected && <Check className="h-3.5 w-3.5 text-violet-300 flex-shrink-0" />}
           </div>
-          <ModelBadges opt={opt} isMobile={isMobile} compact={compact} />
+          <ModelBadges model={model} isMobile={isMobile} compact={compact} />
         </div>
-        <span className={cn("font-bold text-zinc-400 flex-shrink-0", compact ? "text-[10px]" : "text-xs")}>
-          {opt.sizeLabel}
+        <span className={cn("font-bold text-zinc-400 flex-shrink-0 text-xs")}>
+          {activeVariant.sizeLabel}
         </span>
       </div>
 
@@ -146,10 +160,38 @@ function ModelCard({
               style={{ width: `${Math.max(bar, 8)}%` }}
             />
           </div>
-          <p className="text-[10px] text-zinc-500 leading-snug">{getModelSubtitle(opt)}</p>
+          
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+            <p className="text-[10px] text-zinc-500 leading-snug">
+              {getModelSubtitle(activeVariant)}
+            </p>
+            
+            {isSelected && model.variants.length > 1 && (
+              <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                <span className="text-[9px] text-zinc-500 font-semibold uppercase tracking-wider">Engine:</span>
+                <select
+                  value={selectedId}
+                  onChange={(e) => onSelect(e.target.value)}
+                  className="bg-zinc-800 border border-zinc-700/80 rounded px-1.5 py-0.5 text-[10px] text-white outline-none cursor-pointer hover:border-zinc-600 focus:border-zinc-500 transition-colors"
+                >
+                  {model.variants.map((v) => (
+                    <option key={v.id} value={v.id} className="bg-zinc-950 text-white text-xs">
+                      {v.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {!isSelected && model.variants.length > 1 && (
+              <p className="text-[9px] text-zinc-500">
+                Engines: {model.variants.map((v) => v.label).join(", ")}
+              </p>
+            )}
+          </div>
         </div>
       )}
-    </button>
+    </div>
   )
 }
 
@@ -163,32 +205,39 @@ function SetupSelector({
   isMobile: boolean
 }) {
   const [filter, setFilter] = useState<LLMFilter>("recommended")
-  const selected = getLLMOption(selectedId)
+  const selectedVariant = getLLMVariant(selectedId)
+  const selectedModel = getLLMModel(selectedVariant.modelId)
 
   const filtered = useMemo(
-    () => filterLLMOptions(LLM_OPTIONS, filter, isMobile),
+    () => filterLLMModels(LLM_MODELS, filter, isMobile),
     [filter, isMobile],
   )
-  const groups = useMemo(() => groupLLMOptions(filtered), [filtered])
+  const groups = useMemo(() => groupLLMModels(filtered), [filtered])
+
+  // Get accent class for selected model
+  let backendMeta = LLM_BACKEND_META.webllm
+  if (selectedVariant.engine === 'gemma4-kernel') backendMeta = LLM_BACKEND_META.gemma4
+  else if (selectedVariant.engine === 'lfm2-kernel') backendMeta = LLM_BACKEND_META.lfm2
+  else if (selectedVariant.engine === 'transformers-js') backendMeta = LLM_BACKEND_META.qwen35
 
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border border-violet-500/25 bg-gradient-to-br from-violet-500/10 via-zinc-900/60 to-zinc-900/40 p-3">
+      <div className={cn("rounded-xl border bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 p-3", backendMeta.accent)}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-wider font-semibold text-violet-300/80 mb-1">
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-zinc-400 mb-1">
               Selected model
             </p>
-            <p className="text-sm font-semibold text-white truncate">{selected.name}</p>
-            <p className="text-[11px] text-zinc-400 mt-0.5">{getModelSubtitle(selected)}</p>
+            <p className="text-sm font-semibold text-white truncate">{selectedModel.name}</p>
+            <p className="text-[11px] text-zinc-400 mt-0.5">{getModelSubtitle(selectedVariant)} · {selectedVariant.label}</p>
           </div>
           <div className="text-right flex-shrink-0">
-            <p className="text-lg font-bold text-white">{selected.sizeLabel}</p>
+            <p className="text-lg font-bold text-white">{selectedVariant.sizeLabel}</p>
             <p className="text-[10px] text-zinc-500">download</p>
           </div>
         </div>
         <div className="mt-2">
-          <ModelBadges opt={selected} isMobile={isMobile} />
+          <ModelBadges model={selectedModel} isMobile={isMobile} />
         </div>
       </div>
 
@@ -235,13 +284,13 @@ function SetupSelector({
                   <span className="text-[10px] text-zinc-500">{opts.length} models</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {opts.map((opt) => (
+                  {opts.map((model) => (
                     <ModelCard
-                      key={opt.id}
-                      opt={opt}
-                      selected={selectedId === opt.id}
+                      key={model.id}
+                      model={model}
+                      selectedId={selectedId}
                       isMobile={isMobile}
-                      onSelect={() => onSelect(opt.id)}
+                      onSelect={onSelect}
                     />
                   ))}
                 </div>
@@ -265,7 +314,7 @@ function MenuSelector({
   isMobile: boolean
   onClose: () => void
 }) {
-  const groups = groupLLMOptions(LLM_OPTIONS)
+  const groups = groupLLMModels(LLM_MODELS)
 
   return (
     <div className="absolute bottom-full mb-2 left-0 w-[min(100vw-2rem,320px)] bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/80 rounded-xl shadow-2xl z-20 overflow-hidden">
@@ -281,33 +330,35 @@ function MenuSelector({
               <p className="px-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
                 {meta.label}
               </p>
-              {opts.map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => {
-                    onSelect(opt.id)
-                    onClose()
-                  }}
-                  className={cn(
-                    "w-full text-left rounded-lg px-2.5 py-2 transition-colors cursor-pointer",
-                    selectedId === opt.id
-                      ? "bg-violet-500/15 border border-violet-500/30"
-                      : "hover:bg-zinc-800/80 border border-transparent",
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {selectedId === opt.id && <Check className="h-3.5 w-3.5 text-violet-300 flex-shrink-0" />}
-                      <span className="text-xs font-medium text-white truncate">{opt.name}</span>
+              {opts.map((model) => (
+                model.variants.map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => {
+                      onSelect(v.id)
+                      onClose()
+                    }}
+                    className={cn(
+                      "w-full text-left rounded-lg px-2.5 py-2 transition-colors cursor-pointer",
+                      selectedId === v.id
+                        ? "bg-violet-500/15 border border-violet-500/30"
+                        : "hover:bg-zinc-800/80 border border-transparent",
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {selectedId === v.id && <Check className="h-3.5 w-3.5 text-violet-300 flex-shrink-0" />}
+                        <span className="text-xs font-medium text-white truncate">{model.name}</span>
+                      </div>
+                      <span className="text-[10px] text-zinc-500 flex-shrink-0">{v.sizeLabel}</span>
                     </div>
-                    <span className="text-[10px] text-zinc-500 flex-shrink-0">{opt.sizeLabel}</span>
-                  </div>
-                  <div className="mt-1 pl-5 space-y-1">
-                    <p className="text-[10px] text-zinc-500">{LLM_ENGINE_META[opt.engineType].label}</p>
-                    <ModelBadges opt={opt} isMobile={isMobile} compact />
-                  </div>
-                </button>
+                    <div className="mt-1 pl-5 space-y-1">
+                      <p className="text-[10px] text-zinc-500">{v.label}</p>
+                      <ModelBadges model={model} isMobile={isMobile} compact />
+                    </div>
+                  </button>
+                ))
               ))}
             </div>
           )
@@ -327,7 +378,14 @@ export function LLMModelSelector({
 }: LLMModelSelectorProps) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
-  const selected = getLLMOption(selectedId)
+  
+  const selectedVariant = getLLMVariant(selectedId)
+  const selectedModel = getLLMModel(selectedVariant.modelId)
+
+  let backendMeta = LLM_BACKEND_META.webllm
+  if (selectedVariant.engine === 'gemma4-kernel') backendMeta = LLM_BACKEND_META.gemma4
+  else if (selectedVariant.engine === 'lfm2-kernel') backendMeta = LLM_BACKEND_META.lfm2
+  else if (selectedVariant.engine === 'transformers-js') backendMeta = LLM_BACKEND_META.qwen35
 
   useEffect(() => {
     if (variant !== "menu" || !open) return
@@ -367,10 +425,10 @@ export function LLMModelSelector({
         disabled={disabled}
         className="text-zinc-300 hover:text-white hover:bg-zinc-800 gap-1.5 px-2.5 h-8 text-[11px] font-medium max-w-[160px]"
       >
-        <span className={cn("rounded px-1 py-0.5 text-[9px] border", LLM_BACKEND_META[selected.backend].chip)}>
-          {LLM_BACKEND_META[selected.backend].label}
+        <span className={cn("rounded px-1 py-0.5 text-[9px] border", backendMeta.chip)}>
+          {backendMeta.label}
         </span>
-        <span className="truncate">{selected.name}</span>
+        <span className="truncate">{selectedModel.name}</span>
         <ChevronDown className={cn("h-3 w-3 opacity-60 transition-transform", open && "rotate-180")} />
       </Button>
       {open && (
