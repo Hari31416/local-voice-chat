@@ -241,7 +241,8 @@ MIT License — see [LICENSE](LICENSE)
 - [Moonshine](https://github.com/usefulsensors/moonshine) — Useful Sensors
 - [Wav2Vec2](https://github.com/facebookresearch/fairseq/tree/main/examples/wav2vec) — Meta AI
 - [Gemma 4 E2B ONNX](https://huggingface.co/onnx-community/gemma-4-E2B-it-ONNX) — default LLM
-- [Gemma 4 WebGPU Kernels demo](https://huggingface.co/spaces/webml-community/gemma-4-webgpu-kernels) — reference implementation
+- [LFM 2.5 WebGPU Kernels demo](https://huggingface.co/spaces/webml-community/lfm2-webgpu-kernels) — reference implementation for LFM 2.5 WebGPU kernels
+- [Gemma 4 WebGPU Kernels demo](https://huggingface.co/spaces/webml-community/gemma-4-webgpu-kernels) — reference implementation for Gemma 4 WebGPU kernels
 - [WebLLM](https://github.com/mlc-ai/web-llm) — MLC AI (Qwen / Llama models)
 - [Transformers.js](https://github.com/huggingface/transformers.js) — Hugging Face
 - [Lipilekhika](https://www.npmjs.com/package/lipilekhika) — Hindi transliteration input

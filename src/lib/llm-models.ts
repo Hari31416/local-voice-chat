@@ -16,7 +16,7 @@ export interface LLMOption {
 }
 
 export const LLM_OPTIONS: LLMOption[] = [
-  { id: 'gemma4', name: 'Gemma 4 E2B', backend: 'gemma4', supportsVision: true, sizeLabel: '~3.2 GB' },
+  { id: 'gemma4', name: 'Gemma 4 E2B', backend: 'gemma4', supportsVision: false, sizeLabel: '~3.2 GB' },
   { id: 'lfm2-230m', name: 'Liquid LFM 2.5 230M', backend: 'lfm2', lfmModelId: 'LiquidAI/LFM2.5-230M-GGUF', supportsVision: false, sizeLabel: '~230 MB' },
   { id: 'lfm2-350m', name: 'Liquid LFM 2.5 350M', backend: 'lfm2', lfmModelId: 'LiquidAI/LFM2.5-350M-GGUF', supportsVision: false, sizeLabel: '~350 MB' },
   { id: 'qwen-0.5b', name: 'Qwen 0.5B', backend: 'webllm', webllmId: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC', supportsVision: false, sizeLabel: '~400 MB' },
