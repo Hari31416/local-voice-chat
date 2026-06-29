@@ -176,6 +176,11 @@ export function useVoiceAgent() {
       console.error("Qwen35 error:", error)
       setStatusMessage(`LLM error: ${error.message}`)
     },
+    onLoadMessage: (message) => {
+      if (setupPhaseRef.current === "loading") {
+        setStatusMessage(message)
+      }
+    },
   })
 
   const gemma4Ref = useRef(gemma4)
@@ -477,7 +482,7 @@ export function useVoiceAgent() {
             chatMessages,
             systemPrompt,
             lastUserMsg?.image,
-            { maxTokens },
+            { maxTokens, thinkingEnabled: prefsRef.current.useThinking },
           ),
         )
 
@@ -544,10 +549,14 @@ export function useVoiceAgent() {
 
     if (!llmReady) {
       setStatus("error")
+      const isGemmaTransformers =
+        option.engineType === "transformers-js" && option.logicalModelId === "gemma-4-e2b"
       setStatusMessage(
-        option.backend === "gemma4"
-          ? "Gemma 4 failed to load. Try Qwen via the dropdown selector, or check WebGPU / available memory."
-          : "LLM failed to load. Check the browser console for details.",
+        isGemmaTransformers
+          ? "Gemma 4 (Transformers.js) failed to load — it needs ~6–8 GB free RAM. Try the Custom kernels engine, or Qwen 0.8B."
+          : option.backend === "gemma4"
+            ? "Gemma 4 failed to load. Try Qwen via the dropdown selector, or check WebGPU / available memory."
+            : "LLM failed to load. Check the browser console for details.",
       )
       return false
     }

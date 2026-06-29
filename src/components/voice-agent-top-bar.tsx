@@ -3,6 +3,11 @@ import { RotateCcw, Settings, X } from "lucide-react"
 import type { useTTS } from "@/hooks/use-tts"
 import { isCrossOriginIsolated } from "@/lib/ort-config"
 import { IS_IOS } from "@/lib/voice-agent-constants"
+import { getLLMVariant } from "@/lib/llm-models"
+import {
+  getThinkingToggleHint,
+  variantSupportsThinkingToggle,
+} from "@/lib/llm/engine-features"
 import type { DebugInfo, SetupPhase } from "@/lib/voice-agent-types"
 import type { UserPreferences } from "@/lib/user-preferences"
 
@@ -10,6 +15,7 @@ interface VoiceAgentTopBarProps {
   hasMessages: boolean
   setupPhase: SetupPhase
   selectedLLMId: string
+  selectedVariantId: string
   prefs: UserPreferences
   debugInfo: DebugInfo
   tts: ReturnType<typeof useTTS>
@@ -22,6 +28,7 @@ export function VoiceAgentTopBar({
   hasMessages,
   setupPhase,
   selectedLLMId,
+  selectedVariantId,
   prefs,
   debugInfo,
   tts,
@@ -32,6 +39,9 @@ export function VoiceAgentTopBar({
   const [showDebugPanel, setShowDebugPanel] = useState(false)
   const debugPanelRef = useRef<HTMLDivElement | null>(null)
   const debugToggleRef = useRef<HTMLButtonElement | null>(null)
+  const selectedVariant = getLLMVariant(selectedVariantId)
+  const thinkingHint = getThinkingToggleHint(selectedVariant)
+  const showThinkingToggle = variantSupportsThinkingToggle(selectedVariant)
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -146,17 +156,22 @@ export function VoiceAgentTopBar({
                 <span className="text-zinc-500">○</span>
               )}
             </div>
-            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-800">
-              <label className="flex items-center gap-2 cursor-pointer text-zinc-300 hover:text-white select-none">
-                <input
-                  type="checkbox"
-                  checked={prefs.useThinking !== false}
-                  onChange={(e) => onToggleThinking?.(e.target.checked)}
-                  className="rounded border-zinc-750 bg-zinc-900 text-violet-500 focus:ring-violet-500 focus:ring-offset-zinc-900 cursor-pointer h-3.5 w-3.5"
-                />
-                <span>Use model thinking</span>
-              </label>
-            </div>
+            {showThinkingToggle && (
+              <div className="flex flex-col gap-1 mt-2 pt-2 border-t border-zinc-800">
+                <label className="flex items-center gap-2 cursor-pointer text-zinc-300 hover:text-white select-none">
+                  <input
+                    type="checkbox"
+                    checked={prefs.useThinking !== false}
+                    onChange={(e) => onToggleThinking?.(e.target.checked)}
+                    className="rounded border-zinc-750 bg-zinc-900 text-violet-500 focus:ring-violet-500 focus:ring-offset-zinc-900 cursor-pointer h-3.5 w-3.5"
+                  />
+                  <span>Use model thinking</span>
+                </label>
+                {thinkingHint && (
+                  <p className="text-[10px] text-zinc-500 pl-5">{thinkingHint}</p>
+                )}
+              </div>
+            )}
             {setupPhase === "ready" && (
               <button
                 type="button"

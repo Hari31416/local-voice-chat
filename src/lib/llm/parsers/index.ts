@@ -12,9 +12,14 @@ export interface StreamParser {
   process(chunk: string): ParserResult
 }
 
+const THINK_OPEN = '<' + 'think>'
+const THINK_CLOSE = '</' + 'think>'
+
 const SPECIAL_TAGS = [
   '<thinking>',
   '</thinking>',
+  THINK_OPEN,
+  THINK_CLOSE,
   '<think>',
   '</think>',
   '<channel|>',

@@ -108,6 +108,7 @@ export default function App() {
               hasMessages={agent.messages.length > 0}
               setupPhase={agent.setupPhase}
               selectedLLMId={agent.selectedLLMId}
+              selectedVariantId={agent.selectedLLMId}
               prefs={agent.prefs}
               debugInfo={agent.debugInfo}
               tts={agent.tts}

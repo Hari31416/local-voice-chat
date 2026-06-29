@@ -2,6 +2,10 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { LLMModelSelector } from "@/components/llm-model-selector"
 import { getLLMOption, getLLMVariant } from "@/lib/llm-models"
+import {
+  getThinkingToggleHint,
+  variantSupportsThinkingToggle,
+} from "@/lib/llm/engine-features"
 import { STT_OPTIONS } from "@/lib/stt-models"
 import type { STTModelOption } from "@/lib/stt-models"
 import type { TTSEngine, TTSLanguage } from "@/lib/tts-types"
@@ -105,6 +109,8 @@ export function SetupScreen({
   const [useThinking, setUseThinking] = useStateSelection(initial.useThinking ?? true)
 
   const selectedLlm = getLLMOption(variantId)
+  const selectedVariant = getLLMVariant(variantId)
+  const thinkingHint = getThinkingToggleHint(selectedVariant)
   const selectedTtsEngine = TTS_ENGINE_OPTIONS.find((o) => o.id === ttsEngine)!
   const voices = ttsEngine === "supertonic" ? SUPERTRONIC_VOICES : PIPER_VOICES
   const selectedVoice = voices.find((v) => v.id === ttsVoice) || voices[0]
@@ -156,8 +162,8 @@ export function SetupScreen({
             isMobile={isMobile}
             variant="setup"
           />
-          {selectedLlm.capabilities.thinking && (
-            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-zinc-900">
+          {variantSupportsThinkingToggle(selectedVariant) && (
+            <div className="flex flex-col gap-1 mt-3 pt-3 border-t border-zinc-900">
               <label className="flex items-center gap-2 cursor-pointer text-zinc-300 hover:text-white select-none text-xs">
                 <input
                   type="checkbox"
@@ -167,6 +173,9 @@ export function SetupScreen({
                 />
                 <span>Enable model thinking / reasoning</span>
               </label>
+              {thinkingHint && (
+                <p className="text-[10px] text-zinc-500 pl-6">{thinkingHint}</p>
+              )}
             </div>
           )}
         </section>

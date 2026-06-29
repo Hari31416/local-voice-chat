@@ -2,6 +2,7 @@ import {
   DEFAULT_LLM_ID,
   getLLMModel as getCatalogLLMModel,
   hasLLMCapability,
+  resolveModelBackend,
   type LLMBackend,
   type LLMEngineType,
   type LLMModel,
@@ -108,11 +109,7 @@ export function matchesLLMFilter(model: LLMModel, filter: LLMFilter, _isMobile: 
 export function groupLLMModels(models: LLMModel[]): { backend: LLMBackend; opts: LLMModel[] }[] {
   const map = new Map<LLMBackend, LLMModel[]>()
   for (const model of models) {
-    const primaryVariant = model.variants[0]
-    let backend: LLMBackend = 'webllm'
-    if (primaryVariant.engine === 'gemma4-kernel') backend = 'gemma4'
-    else if (primaryVariant.engine === 'lfm2-kernel') backend = 'lfm2'
-    else if (primaryVariant.engine === 'transformers-js') backend = 'qwen35'
+    const backend = resolveModelBackend(model)
 
     if (!map.has(backend)) map.set(backend, [])
     map.get(backend)!.push(model)

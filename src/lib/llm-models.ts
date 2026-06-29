@@ -57,7 +57,7 @@ export const LLM_MODELS: LLMModel[] = [
     id: 'qwen35-0.8b',
     name: 'Qwen 3.5 0.8B',
     family: 'qwen',
-    capabilities: { text: true, vision: true, thinking: false, streaming: true },
+    capabilities: { text: true, vision: true, thinking: true, streaming: true },
     variants: [
       {
         id: 'qwen35-0.8b',
@@ -65,7 +65,7 @@ export const LLM_MODELS: LLMModel[] = [
         engine: 'transformers-js',
         label: 'Transformers.js',
         engineModelId: 'onnx-community/Qwen3.5-0.8B-ONNX-OPT',
-        capabilities: { text: true, vision: true, thinking: false, streaming: true },
+        capabilities: { text: true, vision: true, thinking: true, streaming: true },
         requirements: ['webgpu', 'mobile-friendly'],
         recommendedFor: ['default', 'mobile', 'vision'],
         sizeMb: 800,
@@ -78,7 +78,7 @@ export const LLM_MODELS: LLMModel[] = [
     id: 'qwen35-2b',
     name: 'Qwen 3.5 2B',
     family: 'qwen',
-    capabilities: { text: true, vision: true, thinking: false, streaming: true },
+    capabilities: { text: true, vision: true, thinking: true, streaming: true },
     variants: [
       {
         id: 'qwen35-2b',
@@ -86,7 +86,7 @@ export const LLM_MODELS: LLMModel[] = [
         engine: 'transformers-js',
         label: 'Transformers.js',
         engineModelId: 'onnx-community/Qwen3.5-2B-ONNX-OPT',
-        capabilities: { text: true, vision: true, thinking: false, streaming: true },
+        capabilities: { text: true, vision: true, thinking: true, streaming: true },
         requirements: ['webgpu', 'high-memory'],
         recommendedFor: ['vision', 'quality'],
         sizeMb: 2048,
@@ -99,7 +99,7 @@ export const LLM_MODELS: LLMModel[] = [
     id: 'qwen35-4b',
     name: 'Qwen 3.5 4B',
     family: 'qwen',
-    capabilities: { text: true, vision: true, thinking: false, streaming: true },
+    capabilities: { text: true, vision: true, thinking: true, streaming: true },
     variants: [
       {
         id: 'qwen35-4b',
@@ -107,7 +107,7 @@ export const LLM_MODELS: LLMModel[] = [
         engine: 'transformers-js',
         label: 'Transformers.js',
         engineModelId: 'onnx-community/Qwen3.5-4B-ONNX-OPT',
-        capabilities: { text: true, vision: true, thinking: false, streaming: true },
+        capabilities: { text: true, vision: true, thinking: true, streaming: true },
         requirements: ['webgpu', 'high-memory'],
         recommendedFor: ['vision', 'quality'],
         sizeMb: 4096,
@@ -304,12 +304,27 @@ export const LLM_MODELS: LLMModel[] = [
   }
 ]
 
+export function resolveModelBackend(model: LLMModel): LLMBackend {
+  switch (model.family) {
+    case 'gemma':
+      return 'gemma4'
+    case 'lfm':
+      return 'lfm2'
+    case 'qwen':
+      return 'qwen35'
+    default:
+      return 'webllm'
+  }
+}
+
+export function resolveVariantBackend(variantId: string): LLMBackend {
+  const variant = getLLMVariant(variantId)
+  return resolveModelBackend(getLLMModel(variant.modelId))
+}
+
 export const LLM_OPTIONS: LLMOption[] = LLM_MODELS.flatMap((model) =>
   model.variants.map((variant) => {
-    let backend: LLMBackend = 'webllm'
-    if (variant.engine === 'gemma4-kernel') backend = 'gemma4'
-    else if (variant.engine === 'lfm2-kernel') backend = 'lfm2'
-    else if (variant.engine === 'transformers-js') backend = 'qwen35'
+    const backend = resolveModelBackend(model)
 
     return {
       id: variant.id,
@@ -354,10 +369,16 @@ export function hasLLMCapability(option: LLMOption | LLMVariant | LLMModel, capa
 }
 
 export function getLLMEngineModelId(option: LLMOption): string {
-  if (option.backend === 'gemma4') return option.id
-  if (option.backend === 'lfm2') return option.lfmModelId ?? ''
-  if (option.backend === 'qwen35') return option.qwen35ModelId ?? ''
-  return option.webllmId ?? ''
+  switch (option.engineType) {
+    case 'gemma4-kernel':
+      return option.id
+    case 'lfm2-kernel':
+      return option.lfmModelId ?? ''
+    case 'transformers-js':
+      return option.qwen35ModelId ?? ''
+    case 'webllm':
+      return option.webllmId ?? ''
+  }
 }
 
 export function getLLMVariants(logicalModelId: string): LLMOption[] {

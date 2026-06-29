@@ -3,6 +3,7 @@ import {
   type LLMEngineType,
   getLLMModel,
 } from '@/lib/llm-models'
+import type { AiSdkStreamRequest } from './llm/ai-sdk-stream'
 import { createParser } from './llm/parsers/factory'
 import type { LLMStreamEvent } from './llm/parsers'
 
@@ -15,6 +16,7 @@ type RuntimeMessage = {
 
 type RuntimeStreamOptions = {
   maxTokens?: number
+  thinkingEnabled?: boolean
 }
 
 export type LLMBackendHandle = {
@@ -23,12 +25,15 @@ export type LLMBackendHandle = {
   loadModel: (modelId: string) => Promise<boolean>
   unload: () => Promise<void>
   abort: () => void
-  chatStream: (
+  chatStream?: (
     messages: RuntimeMessage[],
     systemPrompt?: string,
     imageOrOptions?: string | RuntimeStreamOptions,
     options?: RuntimeStreamOptions,
   ) => AsyncGenerator<string, void, unknown>
+  chatStreamEvents?: (
+    request: AiSdkStreamRequest,
+  ) => AsyncGenerator<LLMStreamEvent, void, unknown>
 }
 
 export type LLMRuntimeHandles = {
@@ -74,6 +79,35 @@ export async function* parseRawStream(
       yield { type: 'thinking_delta', text: thinkingDelta }
     }
   }
+  yield { type: 'done' }
+}
+
+function buildAiSdkRequest(
+  req: LLMRequest,
+  variant: LLMVariant,
+): AiSdkStreamRequest {
+  const thinkingEnabled =
+    variant.capabilities.thinking && (req.options?.thinkingEnabled ?? false)
+
+  return {
+    messages: req.messages,
+    systemPrompt: req.systemPrompt,
+    imageDataUrl: req.imageDataUrl,
+    maxTokens: req.options?.maxTokens,
+    thinkingEnabled,
+    modelFamily: getLLMModel(variant.modelId).family,
+  }
+}
+
+async function* streamAiSdkEngine(
+  req: LLMRequest,
+  variant: LLMVariant,
+  handle: LLMBackendHandle,
+): AsyncGenerator<LLMStreamEvent, void, unknown> {
+  if (!handle.chatStreamEvents) {
+    throw new Error('AI SDK streaming is not available for this engine')
+  }
+  yield* handle.chatStreamEvents(buildAiSdkRequest(req, variant))
 }
 
 const gemmaKernelEngine: LLMEngineAdapter = {
@@ -82,12 +116,18 @@ const gemmaKernelEngine: LLMEngineAdapter = {
   unload: async (handles) => handles.gemma4.unload(),
   isReady: (_variant, handles) => handles.gemma4.isReady,
   abort: (handles) => handles.gemma4.abort(),
-  stream: (req, variant, handles) =>
-    parseRawStream(
+  stream: (req, variant, handles) => {
+    if (!handles.gemma4.chatStream) {
+      throw new Error('Gemma kernel streaming is not available')
+    }
+    const thinkingEnabled =
+      variant.capabilities.thinking && (req.options?.thinkingEnabled ?? false)
+    return parseRawStream(
       handles.gemma4.chatStream(req.messages, req.systemPrompt, undefined, req.options),
       getLLMModel(variant.modelId).family,
-      variant.capabilities.thinking,
-    ),
+      thinkingEnabled,
+    )
+  },
   getLoadProgress: (handles) => handles.gemma4.loadProgress,
 }
 
@@ -97,12 +137,16 @@ const lfmKernelEngine: LLMEngineAdapter = {
   unload: async (handles) => handles.lfm2.unload(),
   isReady: (_variant, handles) => handles.lfm2.isReady,
   abort: (handles) => handles.lfm2.abort(),
-  stream: (req, variant, handles) =>
-    parseRawStream(
+  stream: (req, _variant, handles) => {
+    if (!handles.lfm2.chatStream) {
+      throw new Error('LFM kernel streaming is not available')
+    }
+    return parseRawStream(
       handles.lfm2.chatStream(req.messages, req.systemPrompt, req.options),
-      getLLMModel(variant.modelId).family,
-      variant.capabilities.thinking,
-    ),
+      getLLMModel(_variant.modelId).family,
+      false,
+    )
+  },
   getLoadProgress: (handles) => handles.lfm2.loadProgress,
 }
 
@@ -112,12 +156,7 @@ const webllmEngine: LLMEngineAdapter = {
   unload: async (handles) => handles.webllm.unload(),
   isReady: (_variant, handles) => handles.webllm.isReady,
   abort: (handles) => handles.webllm.abort(),
-  stream: (req, variant, handles) =>
-    parseRawStream(
-      handles.webllm.chatStream(req.messages, req.systemPrompt, req.options),
-      getLLMModel(variant.modelId).family,
-      variant.capabilities.thinking,
-    ),
+  stream: (req, variant, handles) => streamAiSdkEngine(req, variant, handles.webllm),
   getLoadProgress: (handles) => handles.webllm.loadProgress,
 }
 
@@ -127,12 +166,7 @@ const transformersEngine: LLMEngineAdapter = {
   unload: async (handles) => handles.qwen35.unload(),
   isReady: (_variant, handles) => handles.qwen35.isReady,
   abort: (handles) => handles.qwen35.abort(),
-  stream: (req, variant, handles) =>
-    parseRawStream(
-      handles.qwen35.chatStream(req.messages, req.systemPrompt, req.imageDataUrl, req.options),
-      getLLMModel(variant.modelId).family,
-      variant.capabilities.thinking,
-    ),
+  stream: (req, variant, handles) => streamAiSdkEngine(req, variant, handles.qwen35),
   getLoadProgress: (handles) => handles.qwen35.loadProgress,
 }
 

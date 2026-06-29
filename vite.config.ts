@@ -28,7 +28,14 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    exclude: ["@huggingface/transformers", "@mlc-ai/web-llm", "onnxruntime-web", "@realtimex/piper-tts-web"],
+    exclude: [
+      "@huggingface/transformers",
+      "@mlc-ai/web-llm",
+      "@browser-ai/transformers-js",
+      "@browser-ai/web-llm",
+      "onnxruntime-web",
+      "@realtimex/piper-tts-web",
+    ],
   },
   build: {
     target: "esnext",

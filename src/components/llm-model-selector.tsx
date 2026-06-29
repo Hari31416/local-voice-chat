@@ -1,13 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Brain, Camera, Check, ChevronDown, Cpu, Sparkles, Zap } from "lucide-react"
+import { Brain, Camera, Check, ChevronDown, Cpu, Sparkles, Wrench, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   LLM_MODELS,
   getLLMModel,
   getLLMVariant,
   hasLLMCapability,
+  resolveModelBackend,
+  resolveVariantBackend,
   type LLMModel,
+  type LLMVariant,
 } from "@/lib/llm-models"
+import {
+  variantHasNativeThinking,
+  variantHasNativeTools,
+  variantHasParsedThinking,
+} from "@/lib/llm/engine-features"
 import {
   filterLLMModels,
   getModelSubtitle,
@@ -28,6 +36,55 @@ interface LLMModelSelectorProps {
   variant?: "setup" | "menu"
   disabled?: boolean
   className?: string
+}
+
+function EngineFeatureBadges({
+  variant,
+  compact = false,
+}: {
+  variant: LLMVariant
+  compact?: boolean
+}) {
+  return (
+    <div className={cn("flex flex-wrap items-center gap-1", compact && "gap-0.5")}>
+      {variantHasNativeThinking(variant) && (
+        <span
+          className={cn(
+            "inline-flex items-center gap-0.5 rounded border font-medium",
+            compact ? "px-1 py-0 text-[8px]" : "px-1.5 py-0.5 text-[9px]",
+            "bg-sky-500/10 text-sky-300 border-sky-500/25",
+          )}
+        >
+          {!compact && <Brain className="h-2.5 w-2.5" />}
+          Native reasoning
+        </span>
+      )}
+      {variantHasParsedThinking(variant) && (
+        <span
+          className={cn(
+            "inline-flex items-center gap-0.5 rounded border font-medium",
+            compact ? "px-1 py-0 text-[8px]" : "px-1.5 py-0.5 text-[9px]",
+            "bg-blue-500/10 text-blue-300 border-blue-500/25",
+          )}
+        >
+          {!compact && <Brain className="h-2.5 w-2.5" />}
+          Parsed reasoning
+        </span>
+      )}
+      {variantHasNativeTools(variant) && (
+        <span
+          className={cn(
+            "inline-flex items-center gap-0.5 rounded border font-medium",
+            compact ? "px-1 py-0 text-[8px]" : "px-1.5 py-0.5 text-[9px]",
+            "bg-amber-500/10 text-amber-300 border-amber-500/25",
+          )}
+        >
+          {!compact && <Wrench className="h-2.5 w-2.5" />}
+          Tools
+        </span>
+      )}
+    </div>
+  )
 }
 
 function ModelBadges({
@@ -110,13 +167,8 @@ function ModelCard({
 }) {
   const isSelected = model.variants.some((v) => v.id === selectedId)
   const activeVariant = model.variants.find((v) => v.id === selectedId) || model.variants[0]
-  
-  // Use backend meta of the first variant or selected variant
-  const primaryVariant = model.variants[0]
-  let backend: typeof LLM_BACKEND_META[keyof typeof LLM_BACKEND_META] = LLM_BACKEND_META.webllm
-  if (primaryVariant.engine === 'gemma4-kernel') backend = LLM_BACKEND_META.gemma4
-  else if (primaryVariant.engine === 'lfm2-kernel') backend = LLM_BACKEND_META.lfm2
-  else if (primaryVariant.engine === 'transformers-js') backend = LLM_BACKEND_META.qwen35
+
+  const backend = LLM_BACKEND_META[resolveModelBackend(model)]
 
   const bar = sizeBarPercentForVariant(activeVariant)
 
@@ -162,9 +214,12 @@ function ModelCard({
           </div>
           
           <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-            <p className="text-[10px] text-zinc-500 leading-snug">
-              {getModelSubtitle(activeVariant)}
-            </p>
+            <div className="space-y-1">
+              <p className="text-[10px] text-zinc-500 leading-snug">
+                {getModelSubtitle(activeVariant)}
+              </p>
+              {isSelected && <EngineFeatureBadges variant={activeVariant} compact={compact} />}
+            </div>
             
             {isSelected && model.variants.length > 1 && (
               <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
@@ -214,11 +269,7 @@ function SetupSelector({
   )
   const groups = useMemo(() => groupLLMModels(filtered), [filtered])
 
-  // Get accent class for selected model
-  let backendMeta = LLM_BACKEND_META.webllm
-  if (selectedVariant.engine === 'gemma4-kernel') backendMeta = LLM_BACKEND_META.gemma4
-  else if (selectedVariant.engine === 'lfm2-kernel') backendMeta = LLM_BACKEND_META.lfm2
-  else if (selectedVariant.engine === 'transformers-js') backendMeta = LLM_BACKEND_META.qwen35
+  const backendMeta = LLM_BACKEND_META[resolveVariantBackend(selectedId)]
 
   return (
     <div className="space-y-3">
@@ -236,8 +287,9 @@ function SetupSelector({
             <p className="text-[10px] text-zinc-500">download</p>
           </div>
         </div>
-        <div className="mt-2">
+        <div className="mt-2 space-y-1.5">
           <ModelBadges model={selectedModel} isMobile={isMobile} />
+          <EngineFeatureBadges variant={selectedVariant} />
         </div>
       </div>
 
@@ -356,6 +408,7 @@ function MenuSelector({
                     <div className="mt-1 pl-5 space-y-1">
                       <p className="text-[10px] text-zinc-500">{v.label}</p>
                       <ModelBadges model={model} isMobile={isMobile} compact />
+                      <EngineFeatureBadges variant={v} compact />
                     </div>
                   </button>
                 ))
@@ -382,10 +435,7 @@ export function LLMModelSelector({
   const selectedVariant = getLLMVariant(selectedId)
   const selectedModel = getLLMModel(selectedVariant.modelId)
 
-  let backendMeta = LLM_BACKEND_META.webllm
-  if (selectedVariant.engine === 'gemma4-kernel') backendMeta = LLM_BACKEND_META.gemma4
-  else if (selectedVariant.engine === 'lfm2-kernel') backendMeta = LLM_BACKEND_META.lfm2
-  else if (selectedVariant.engine === 'transformers-js') backendMeta = LLM_BACKEND_META.qwen35
+  const backendMeta = LLM_BACKEND_META[resolveVariantBackend(selectedId)]
 
   useEffect(() => {
     if (variant !== "menu" || !open) return
