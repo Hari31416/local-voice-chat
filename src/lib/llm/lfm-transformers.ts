@@ -6,7 +6,7 @@ type TokenizerWithTemplate = {
   chat_template?: string
 }
 
-type TransformersModelInternals = TransformersJSLanguageModel & {
+type TransformersModelInternals = {
   modelInstance?: [TokenizerWithTemplate, unknown]
 }
 
@@ -28,7 +28,7 @@ export function stripLfmGenerationBlocks(template: string): string {
 }
 
 export function patchLfmTransformersChatTemplate(model: TransformersJSLanguageModel): void {
-  const tokenizer = (model as TransformersModelInternals).modelInstance?.[0]
+  const tokenizer = (model as unknown as TransformersModelInternals).modelInstance?.[0]
   if (!tokenizer?.chat_template) return
   tokenizer.chat_template = stripLfmGenerationBlocks(tokenizer.chat_template)
 }
@@ -67,7 +67,7 @@ export async function* streamLfmTransformersToEvents(
   abortSignal?: AbortSignal,
 ): AsyncGenerator<LLMStreamEvent, void, unknown> {
   const { stream } = await model.doStream({
-    prompt: buildLfmPrompt(req),
+    prompt: buildLfmPrompt(req) as Parameters<TransformersJSLanguageModel['doStream']>[0]['prompt'],
     maxOutputTokens: req.maxTokens,
     abortSignal,
   })

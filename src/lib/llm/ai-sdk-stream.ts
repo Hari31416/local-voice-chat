@@ -192,7 +192,11 @@ export async function* streamAiSdkToEvents(
   abortSignal?: AbortSignal,
 ): AsyncGenerator<LLMStreamEvent, void, unknown> {
   if (provider === 'transformers-js' && isLfmOnnxModel(model.modelId)) {
-    yield* streamLfmTransformersToEvents(model, req, abortSignal)
+    yield* streamLfmTransformersToEvents(
+      model as TransformersJSLanguageModel,
+      req,
+      abortSignal,
+    )
     return
   }
 
