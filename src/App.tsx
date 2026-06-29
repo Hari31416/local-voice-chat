@@ -6,6 +6,7 @@ import { WarningBanners } from "@/components/warning-banners"
 import { useVoiceAgent } from "@/hooks/use-voice-agent"
 import { TTSStudio } from "@/components/tts-studio"
 import { STTStudio } from "@/components/stt-studio"
+import { hasLLMCapability } from "@/lib/llm-models"
 import { cn } from "@/lib/utils"
 
 export default function App() {
@@ -132,7 +133,7 @@ export default function App() {
               voiceOptions={agent.voiceOptions}
               waveformActive={agent.waveformActive}
               waveformProcessing={agent.waveformProcessing}
-              supportsVision={agent.selectedOption.supportsVision}
+              canAttachImage={hasLLMCapability(agent.selectedOption, "vision")}
               onTextInputChange={agent.setTextInput}
               hindiTypingEnabled={agent.prefs.hindiTypingEnabled}
               onHindiTypingChange={agent.setHindiTypingEnabled}

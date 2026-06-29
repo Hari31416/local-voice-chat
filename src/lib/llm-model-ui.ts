@@ -1,6 +1,13 @@
-import { DEFAULT_LLM_ID, type LLMBackend, type LLMOption, LLM_OPTIONS } from "@/lib/llm-models"
+import {
+  DEFAULT_LLM_ID,
+  getLLMOption as getCatalogLLMOption,
+  hasLLMCapability,
+  type LLMBackend,
+  type LLMEngineType,
+  type LLMOption,
+} from "@/lib/llm-models"
 
-export type LLMFilter = "all" | "vision" | "light" | "mobile"
+export type LLMFilter = "all" | "recommended" | "vision" | "thinking" | "light" | "mobile"
 
 export const LLM_BACKEND_META: Record<
   LLMBackend,
@@ -33,15 +40,36 @@ export const LLM_BACKEND_META: Record<
 }
 
 export const LLM_FILTER_OPTIONS: { id: LLMFilter; label: string }[] = [
-  { id: "all", label: "All" },
+  { id: "recommended", label: "Recommended" },
   { id: "vision", label: "Vision" },
+  { id: "thinking", label: "Thinking" },
   { id: "light", label: "Under 1 GB" },
   { id: "mobile", label: "Mobile OK" },
+  { id: "all", label: "All" },
 ]
 
 const BACKEND_ORDER: LLMBackend[] = ["qwen35", "gemma4", "lfm2", "webllm"]
 
 const MOBILE_MAX_SIZE_MB = 1536 // ~1.5 GB — typical mobile tab memory limit
+
+export const LLM_ENGINE_META: Record<LLMEngineType, { label: string; description: string }> = {
+  "transformers-js": {
+    label: "Transformers.js",
+    description: "HF Transformers.js on WebGPU",
+  },
+  "gemma4-kernel": {
+    label: "Gemma kernels",
+    description: "Precomputed custom WebGPU kernels",
+  },
+  "lfm2-kernel": {
+    label: "LFM kernels",
+    description: "Precomputed hybrid WebGPU kernels",
+  },
+  webllm: {
+    label: "WebLLM",
+    description: "MLC runtime on WebGPU",
+  },
+}
 
 export function parseModelSizeMB(sizeLabel: string): number {
   const value = parseFloat(sizeLabel.replace(/[~ MBGB]/g, "").trim())
@@ -51,7 +79,7 @@ export function parseModelSizeMB(sizeLabel: string): number {
 
 /** Models likely to run on mobile browsers without crashing the tab. */
 export function isMobileFriendlyModel(opt: LLMOption): boolean {
-  return parseModelSizeMB(opt.sizeLabel) < MOBILE_MAX_SIZE_MB
+  return opt.sizeMb < MOBILE_MAX_SIZE_MB || opt.requirements.includes("mobile-friendly")
 }
 
 export function isHeavyForMobile(opt: LLMOption, isMobile: boolean): boolean {
@@ -61,10 +89,14 @@ export function isHeavyForMobile(opt: LLMOption, isMobile: boolean): boolean {
 
 export function matchesLLMFilter(opt: LLMOption, filter: LLMFilter, _isMobile: boolean): boolean {
   switch (filter) {
+    case "recommended":
+      return isRecommendedLLM(opt) || opt.recommendedFor.includes("mobile") || opt.recommendedFor.includes("vision")
     case "vision":
-      return opt.supportsVision
+      return hasLLMCapability(opt, "vision")
+    case "thinking":
+      return hasLLMCapability(opt, "thinking")
     case "light":
-      return parseModelSizeMB(opt.sizeLabel) < 1024
+      return opt.sizeMb < 1024
     case "mobile":
       return isMobileFriendlyModel(opt)
     default:
@@ -93,7 +125,7 @@ export function filterLLMOptions(
 }
 
 export function getLLMOption(id: string): LLMOption {
-  return LLM_OPTIONS.find((o) => o.id === id) ?? LLM_OPTIONS[0]
+  return getCatalogLLMOption(id)
 }
 
 export function isRecommendedLLM(opt: LLMOption): boolean {
@@ -103,4 +135,21 @@ export function isRecommendedLLM(opt: LLMOption): boolean {
 export function sizeBarPercent(sizeLabel: string): number {
   const mb = parseModelSizeMB(sizeLabel)
   return Math.min(100, Math.round((mb / 4096) * 100))
+}
+
+export function sizeBarPercentForOption(opt: LLMOption): number {
+  return Math.min(100, Math.round((opt.sizeMb / 4096) * 100))
+}
+
+export function getCapabilityLabels(opt: LLMOption): string[] {
+  const labels = ["Text"]
+  if (hasLLMCapability(opt, "vision")) labels.push("Vision")
+  if (hasLLMCapability(opt, "thinking")) labels.push("Thinking")
+  return labels
+}
+
+export function getModelSubtitle(opt: LLMOption): string {
+  const engine = LLM_ENGINE_META[opt.engineType].label
+  const suffix = opt.variantLabel ? ` · ${opt.variantLabel}` : ""
+  return `${engine}${suffix}`
 }

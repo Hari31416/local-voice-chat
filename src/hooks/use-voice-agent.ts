@@ -4,9 +4,17 @@ import { useTTS } from "@/hooks/use-tts"
 import { useGemma4 } from "@/hooks/use-gemma4"
 import { useWebLLM } from "@/hooks/use-webllm"
 import { useLfm2 } from "@/hooks/use-lfm2"
-import { useQwen35, type Qwen35ModelId } from "@/hooks/use-qwen35"
-import { DEFAULT_LLM_ID, LLM_OPTIONS } from "@/lib/llm-models"
-import { buildSystemPrompt, getMaxTokens } from "@/lib/system-prompt"
+import { useQwen35 } from "@/hooks/use-qwen35"
+import { DEFAULT_LLM_ID, getLLMMaxTokens, getLLMOption } from "@/lib/llm-models"
+import {
+  abortLLMOption,
+  getLLMLoadProgress,
+  loadLLMOption,
+  streamLLMOption,
+  type LLMRuntimeHandles,
+  unloadStaleLLMOption,
+} from "@/lib/llm-runtime"
+import { buildSystemPrompt } from "@/lib/system-prompt"
 import { IS_IOS } from "@/lib/voice-agent-constants"
 import {
   type ChatMessage,
@@ -189,15 +197,18 @@ export function useVoiceAgent() {
     setupPhaseRef.current = setupPhase
   }, [gemma4, webllm, lfm2, qwen35, tts, selectedLLMId, prefs, setupPhase])
 
-  const selectedOption = LLM_OPTIONS.find((o) => o.id === selectedLLMId) || LLM_OPTIONS[0]
-  const llmLoadProgress =
-    selectedOption.backend === "gemma4"
-      ? gemma4.loadProgress
-      : selectedOption.backend === "lfm2"
-        ? lfm2.loadProgress
-        : selectedOption.backend === "qwen35"
-          ? qwen35.loadProgress
-          : webllm.loadProgress
+  const getLLMHandles = useCallback(
+    (): LLMRuntimeHandles => ({
+      gemma4: gemma4Ref.current as unknown as LLMRuntimeHandles["gemma4"],
+      webllm: webllmRef.current as unknown as LLMRuntimeHandles["webllm"],
+      lfm2: lfm2Ref.current as unknown as LLMRuntimeHandles["lfm2"],
+      qwen35: qwen35Ref.current as unknown as LLMRuntimeHandles["qwen35"],
+    }),
+    [],
+  )
+
+  const selectedOption = getLLMOption(selectedLLMId)
+  const llmLoadProgress = getLLMLoadProgress(selectedOption, getLLMHandles())
 
   const activeLoadProgress: LoadProgress | null =
     prefs.sttEnabled && !debugInfo.sttLoaded
@@ -265,17 +276,13 @@ export function useVoiceAgent() {
         const chatMessages = recentHistory.map((m) => ({ role: m.role, content: m.content }))
         const lastUserText =
           [...recentHistory].reverse().find((m) => m.role === 'user')?.content ?? ''
-        const option =
-          LLM_OPTIONS.find((o) => o.id === selectedLLMIdRef.current) || LLM_OPTIONS[0]
+        const option = getLLMOption(selectedLLMIdRef.current)
         const ttsEnabled = prefsRef.current.ttsEnabled
         const voiceProfile = ttsEnabled
           ? getVoiceProfile(ttsRef.current.engine, ttsRef.current.voice)
           : null
         const systemPrompt = buildSystemPrompt(lastUserText, ttsEnabled, voiceProfile)
-        const maxTokens = getMaxTokens(
-          option.backend,
-          ttsEnabled,
-        )
+        const maxTokens = getLLMMaxTokens(option, ttsEnabled)
 
         let assistantMessage = ''
 
@@ -420,63 +427,21 @@ export function useVoiceAgent() {
 
         const runLLMStream = ttsEnabled ? streamLLMWithSentenceTTS : streamLLMTextOnly
 
-        if (option.backend === 'gemma4') {
-          const currentGemma4 = gemma4Ref.current
-          if (!currentGemma4.isReady) {
-            throw new Error(
-              'Gemma 4 is not loaded — reload the page or switch model in the dropdown'
-            )
-          }
-          console.debug(
-            `[Voice] Using Gemma 4 E2B, history: ${recentHistory.length}/${conversationHistory.length}`
-          )
+        console.debug(
+          `[Voice] Using ${option.name} via ${option.engineType}, history: ${recentHistory.length}/${conversationHistory.length}`,
+        )
 
-          const lastUserMsg = [...recentHistory].reverse().find((m) => m.role === 'user')
-          const lastUserImage = lastUserMsg?.image
-
-          await runLLMStream(
-            currentGemma4.chatStream(chatMessages, systemPrompt, lastUserImage, { maxTokens }),
-          )
-        } else if (option.backend === 'lfm2') {
-          const currentLfm2 = lfm2Ref.current
-          if (!currentLfm2.isReady) {
-            throw new Error('Liquid LFM 2.5 is not loaded')
-          }
-          console.debug(
-            `[Voice] Using Liquid LFM 2.5 (${option.name}), history: ${recentHistory.length}/${conversationHistory.length}`
-          )
-
-          await runLLMStream(
-            currentLfm2.chatStream(chatMessages, systemPrompt, { maxTokens }),
-          )
-        } else if (option.backend === 'qwen35') {
-          const currentQwen35 = qwen35Ref.current
-          if (!currentQwen35.isReady) {
-            throw new Error('Qwen 3.5 is not loaded')
-          }
-          console.debug(
-            `[Voice] Using Qwen 3.5 (${option.name}), history: ${recentHistory.length}/${conversationHistory.length}`
-          )
-
-          const lastUserMsg = [...recentHistory].reverse().find((m) => m.role === 'user')
-          const lastUserImage = lastUserMsg?.image
-
-          await runLLMStream(
-            currentQwen35.chatStream(chatMessages, systemPrompt, lastUserImage, { maxTokens }),
-          )
-        } else {
-          const currentWebllm = webllmRef.current
-          if (!currentWebllm.isReady) {
-            throw new Error('LLM not ready')
-          }
-          console.debug(
-            `[Voice] Using WebLLM (${option.name}), history: ${recentHistory.length}/${conversationHistory.length}`
-          )
-
-          await runLLMStream(
-            currentWebllm.chatStream(chatMessages, systemPrompt, { maxTokens }),
-          )
-        }
+        const lastUserMsg = [...recentHistory].reverse().find((m) => m.role === 'user')
+        await runLLMStream(
+          streamLLMOption(
+            option,
+            getLLMHandles(),
+            chatMessages,
+            systemPrompt,
+            lastUserMsg?.image,
+            { maxTokens },
+          ),
+        )
 
         if (isCallActiveRef.current || isMicActiveRef.current) {
           setStatus("listening")
@@ -528,23 +493,12 @@ export function useVoiceAgent() {
 
   const loadLlm = useCallback(async (): Promise<boolean> => {
     const selectedId = selectedLLMIdRef.current
-    const option = LLM_OPTIONS.find((o) => o.id === selectedId) || LLM_OPTIONS[0]
+    const option = getLLMOption(selectedId)
     let llmReady = false
 
     try {
-      if (option.backend === "gemma4") {
-        setStatusMessage("Loading Gemma 4 E2B LLM (~3.2GB)...")
-        llmReady = await gemma4Ref.current.loadModel()
-      } else if (option.backend === "lfm2") {
-        setStatusMessage(`Loading ${option.name} LLM (${option.sizeLabel})...`)
-        llmReady = await lfm2Ref.current.loadModel(option.lfmModelId || "")
-      } else if (option.backend === "qwen35") {
-        setStatusMessage(`Loading ${option.name} LLM (${option.sizeLabel})...`)
-        llmReady = await qwen35Ref.current.loadModel(option.qwen35ModelId as Qwen35ModelId)
-      } else {
-        setStatusMessage(`Loading ${option.name} LLM (${option.sizeLabel})...`)
-        llmReady = await webllmRef.current.loadModel(option.webllmId as never)
-      }
+      setStatusMessage(`Loading ${option.name} LLM (${option.sizeLabel}) via ${option.engineType}...`)
+      llmReady = await loadLLMOption(option, getLLMHandles())
     } catch (error) {
       console.error("[Voice] LLM load error:", error)
     }
@@ -561,7 +515,7 @@ export function useVoiceAgent() {
 
     setDebugInfo((prev) => ({ ...prev, llmLoaded: true, llmMode: selectedId }))
     return true
-  }, [])
+  }, [getLLMHandles])
 
   const loadTtsThenLlm = useCallback(async (): Promise<void> => {
     const ttsPrefs = prefsRef.current
@@ -651,17 +605,7 @@ export function useVoiceAgent() {
               console.debug("[Voice] Interrupting - new user input")
               abortControllerRef.current?.abort()
 
-              const currentOption =
-                LLM_OPTIONS.find((o) => o.id === selectedLLMIdRef.current) || LLM_OPTIONS[0]
-              if (currentOption.backend === "gemma4") {
-                gemma4Ref.current.abort()
-              } else if (currentOption.backend === "lfm2") {
-                lfm2Ref.current.abort()
-              } else if (currentOption.backend === "qwen35") {
-                qwen35Ref.current.abort()
-              } else {
-                webllmRef.current.abort()
-              }
+              abortLLMOption(getLLMOption(selectedLLMIdRef.current), getLLMHandles())
               if (prefsRef.current.ttsEnabled) {
                 tts.stop()
               }
@@ -784,44 +728,14 @@ export function useVoiceAgent() {
       setStatus("loading")
       setDebugInfo((prev) => ({ ...prev, llmLoaded: false, llmMode: newModelId }))
 
-      const oldOption = LLM_OPTIONS.find((o) => o.id === selectedLLMId)
-      const newOption = LLM_OPTIONS.find((o) => o.id === newModelId)
+      const oldOption = getLLMOption(selectedLLMId)
+      const newOption = getLLMOption(newModelId)
 
-      if (oldOption && newOption) {
-        if (oldOption.backend !== newOption.backend) {
-          if (oldOption.backend === "gemma4") await gemma4Ref.current.unload()
-          else if (oldOption.backend === "webllm") await webllmRef.current.unload()
-          else if (oldOption.backend === "lfm2") await lfm2Ref.current.unload()
-          else if (oldOption.backend === "qwen35") await qwen35Ref.current.unload()
-        } else {
-          if (oldOption.backend === "webllm" && oldOption.webllmId !== newOption.webllmId) {
-            await webllmRef.current.unload()
-          } else if (oldOption.backend === "lfm2" && oldOption.lfmModelId !== newOption.lfmModelId) {
-            await lfm2Ref.current.unload()
-          } else if (
-            oldOption.backend === "qwen35" &&
-            oldOption.qwen35ModelId !== newOption.qwen35ModelId
-          ) {
-            await qwen35Ref.current.unload()
-          }
-        }
-      }
+      await unloadStaleLLMOption(oldOption, newOption, getLLMHandles())
 
       try {
-        let llmReady = false
-        if (newOption?.backend === "gemma4") {
-          setStatusMessage("Loading Gemma 4 E2B LLM (~3.2GB)...")
-          llmReady = await gemma4Ref.current.loadModel()
-        } else if (newOption?.backend === "lfm2") {
-          setStatusMessage(`Loading ${newOption.name} LLM (${newOption.sizeLabel})...`)
-          llmReady = await lfm2Ref.current.loadModel(newOption.lfmModelId || "")
-        } else if (newOption?.backend === "qwen35") {
-          setStatusMessage(`Loading ${newOption.name} LLM (${newOption.sizeLabel})...`)
-          llmReady = await qwen35Ref.current.loadModel(newOption.qwen35ModelId as Qwen35ModelId)
-        } else if (newOption) {
-          setStatusMessage(`Loading ${newOption.name} LLM (${newOption.sizeLabel})...`)
-          llmReady = await webllmRef.current.loadModel(newOption.webllmId as never)
-        }
+        setStatusMessage(`Loading ${newOption.name} LLM (${newOption.sizeLabel}) via ${newOption.engineType}...`)
+        const llmReady = await loadLLMOption(newOption, getLLMHandles())
 
         if (!llmReady) {
           setStatus("error")
@@ -838,7 +752,7 @@ export function useVoiceAgent() {
         setStatusMessage(`LLM failed to load: ${err instanceof Error ? err.message : String(err)}`)
       }
     },
-    [selectedLLMId, status, debugInfo.llmLoaded],
+    [selectedLLMId, status, debugInfo.llmLoaded, getLLMHandles],
   )
 
   const handleImageSelect = useCallback(async (file: File) => {
@@ -921,17 +835,7 @@ export function useVoiceAgent() {
 
   const endCall = useCallback(() => {
     abortControllerRef.current?.abort()
-    const option =
-      LLM_OPTIONS.find((o) => o.id === selectedLLMIdRef.current) || LLM_OPTIONS[0]
-    if (option.backend === "gemma4") {
-      gemma4Ref.current.abort()
-    } else if (option.backend === "lfm2") {
-      lfm2Ref.current.abort()
-    } else if (option.backend === "qwen35") {
-      qwen35Ref.current.abort()
-    } else {
-      webllmRef.current.abort()
-    }
+    abortLLMOption(getLLMOption(selectedLLMIdRef.current), getLLMHandles())
     abortControllerRef.current = null
     isProcessingRef.current = false
 
@@ -940,7 +844,7 @@ export function useVoiceAgent() {
     tts.stop()
     setStatus("ready")
     setStatusMessage(getReadyMessage(prefsRef.current))
-  }, [stopListening, tts])
+  }, [getLLMHandles, stopListening, tts])
 
   const handleResetPreferences = useCallback(async () => {
     abortControllerRef.current?.abort()

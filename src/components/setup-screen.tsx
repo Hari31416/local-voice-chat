@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { LLMModelSelector } from "@/components/llm-model-selector"
-import { LLM_OPTIONS } from "@/lib/llm-models"
+import { getLLMOption } from "@/lib/llm-models"
 import { STT_OPTIONS } from "@/lib/stt-models"
 import type { STTModelOption } from "@/lib/stt-models"
 import type { TTSEngine, TTSLanguage } from "@/lib/tts-types"
@@ -101,7 +101,7 @@ export function SetupScreen({
     initial.hindiTypingEnabled ?? defaultHindiTypingForLanguage(initial.ttsLanguage),
   )
 
-  const selectedLlm = LLM_OPTIONS.find((o) => o.id === llmId) || LLM_OPTIONS[0]
+  const selectedLlm = getLLMOption(llmId)
   const selectedTtsEngine = TTS_ENGINE_OPTIONS.find((o) => o.id === ttsEngine)!
   const voices = ttsEngine === "supertonic" ? SUPERTRONIC_VOICES : PIPER_VOICES
   const selectedVoice = voices.find((v) => v.id === ttsVoice) || voices[0]

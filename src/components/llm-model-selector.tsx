@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Camera, Check, ChevronDown, Cpu, Sparkles, Zap } from "lucide-react"
+import { Brain, Camera, Check, ChevronDown, Cpu, Sparkles, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { LLMOption } from "@/lib/llm-models"
-import { LLM_OPTIONS } from "@/lib/llm-models"
+import { hasLLMCapability, LLM_OPTIONS } from "@/lib/llm-models"
 import {
   filterLLMOptions,
+  getModelSubtitle,
   getLLMOption,
   groupLLMOptions,
   isHeavyForMobile,
   isRecommendedLLM,
   LLM_BACKEND_META,
+  LLM_ENGINE_META,
   LLM_FILTER_OPTIONS,
-  sizeBarPercent,
+  sizeBarPercentForOption,
   type LLMFilter,
 } from "@/lib/llm-model-ui"
 import { cn } from "@/lib/utils"
@@ -51,7 +53,7 @@ function ModelBadges({
           Default
         </span>
       )}
-      {opt.supportsVision && (
+      {hasLLMCapability(opt, "vision") && (
         <span
           className={cn(
             "inline-flex items-center gap-0.5 rounded border font-medium",
@@ -61,6 +63,18 @@ function ModelBadges({
         >
           {!compact && <Camera className="h-2.5 w-2.5" />}
           Vision
+        </span>
+      )}
+      {hasLLMCapability(opt, "thinking") && (
+        <span
+          className={cn(
+            "inline-flex items-center gap-0.5 rounded border font-medium",
+            compact ? "px-1 py-0 text-[8px]" : "px-1.5 py-0.5 text-[9px]",
+            "bg-blue-500/10 text-blue-300 border-blue-500/25",
+          )}
+        >
+          {!compact && <Brain className="h-2.5 w-2.5" />}
+          Thinks
         </span>
       )}
       {heavy && (
@@ -92,7 +106,7 @@ function ModelCard({
   compact?: boolean
 }) {
   const meta = LLM_BACKEND_META[opt.backend]
-  const bar = sizeBarPercent(opt.sizeLabel)
+  const bar = sizeBarPercentForOption(opt)
 
   return (
     <button
@@ -132,7 +146,7 @@ function ModelCard({
               style={{ width: `${Math.max(bar, 8)}%` }}
             />
           </div>
-          <p className="text-[10px] text-zinc-500 leading-snug">{meta.description}</p>
+          <p className="text-[10px] text-zinc-500 leading-snug">{getModelSubtitle(opt)}</p>
         </div>
       )}
     </button>
@@ -148,7 +162,7 @@ function SetupSelector({
   onSelect: (id: string) => void
   isMobile: boolean
 }) {
-  const [filter, setFilter] = useState<LLMFilter>("all")
+  const [filter, setFilter] = useState<LLMFilter>("recommended")
   const selected = getLLMOption(selectedId)
 
   const filtered = useMemo(
@@ -166,7 +180,7 @@ function SetupSelector({
               Selected model
             </p>
             <p className="text-sm font-semibold text-white truncate">{selected.name}</p>
-            <p className="text-[11px] text-zinc-400 mt-0.5">{LLM_BACKEND_META[selected.backend].description}</p>
+            <p className="text-[11px] text-zinc-400 mt-0.5">{getModelSubtitle(selected)}</p>
           </div>
           <div className="text-right flex-shrink-0">
             <p className="text-lg font-bold text-white">{selected.sizeLabel}</p>
@@ -289,7 +303,8 @@ function MenuSelector({
                     </div>
                     <span className="text-[10px] text-zinc-500 flex-shrink-0">{opt.sizeLabel}</span>
                   </div>
-                  <div className="mt-1 pl-5">
+                  <div className="mt-1 pl-5 space-y-1">
+                    <p className="text-[10px] text-zinc-500">{LLM_ENGINE_META[opt.engineType].label}</p>
                     <ModelBadges opt={opt} isMobile={isMobile} compact />
                   </div>
                 </button>

@@ -45,7 +45,7 @@ interface ControlBarProps {
   voiceOptions: VoiceOption[]
   waveformActive: boolean
   waveformProcessing: boolean
-  supportsVision: boolean
+  canAttachImage: boolean
   onTextInputChange: (value: string) => void
   hindiTypingEnabled: boolean
   onHindiTypingChange: (enabled: boolean) => void
@@ -77,7 +77,7 @@ export function ControlBar({
   voiceOptions,
   waveformActive,
   waveformProcessing,
-  supportsVision,
+  canAttachImage,
   onTextInputChange,
   hindiTypingEnabled,
   onHindiTypingChange,
@@ -240,7 +240,7 @@ export function ControlBar({
                   }}
                   className="flex-1 flex items-center bg-zinc-900/50 border border-zinc-700/30 rounded-xl px-2.5 py-1.5 gap-2"
                 >
-                  {supportsVision && (
+                  {canAttachImage && (
                     <div className="flex-shrink-0">
                       <input
                         type="file"

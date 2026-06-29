@@ -39,20 +39,6 @@ function voicePersonaRules(profile: VoiceProfile): string {
 - Do not change the user's gender; only match your own spoken persona.`
 }
 
-export const LLM_MAX_TOKENS = {
-  webllm: { voice: 256, text: 1024 },
-  gemma4: { voice: 128, text: 512 },
-  lfm2: { voice: 256, text: 1024 },
-  qwen35: { voice: 256, text: 1024 },
-} as const
-
-export function getMaxTokens(
-  backend: "webllm" | "gemma4" | "lfm2" | "qwen35",
-  ttsEnabled: boolean,
-): number {
-  return ttsEnabled ? LLM_MAX_TOKENS[backend].voice : LLM_MAX_TOKENS[backend].text
-}
-
 function turnHint(lastUserMessage: string): string {
   const lang = detectLanguage(lastUserMessage)
   if (lang === "hi") {
