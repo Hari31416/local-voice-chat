@@ -11,6 +11,7 @@ import type { ChatMessage, LoadProgress, SetupPhase, VoiceAgentStatus } from "@/
 import { AudioWaveformPlayer } from "@/components/audio-waveform-player"
 import { MessageText } from "@/components/message-text"
 import type { UserPreferences } from "@/lib/user-preferences"
+import { ToolActivity } from "@/components/tool-activity"
 import { Brain, ChevronDown, ChevronUp } from "lucide-react"
 
 interface ThinkingBlockProps {
@@ -175,6 +176,13 @@ export function ConversationArea({
                         className="max-h-48 rounded-lg object-contain border border-zinc-800 shadow-md"
                       />
                     )}
+                    {msg.role === "assistant" && (msg.toolCalls?.length || msg.toolResults?.length) ? (
+                      <ToolActivity
+                        toolCalls={msg.toolCalls}
+                        toolResults={msg.toolResults}
+                        isActive={isLatestAssistant && agentStatus === "thinking"}
+                      />
+                    ) : null}
                     {msg.role === "assistant" && msg.thinking && prefs.useThinking !== false && (
                       <ThinkingBlock
                         thinking={msg.thinking}

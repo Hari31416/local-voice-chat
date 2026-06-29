@@ -1,6 +1,17 @@
+import type { LLMToolCall, LLMToolResult } from '@/lib/tools/types'
+
+export type LLMUsage = {
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+}
+
 export type LLMStreamEvent =
   | { type: 'text_delta'; text: string }
   | { type: 'thinking_delta'; text: string }
+  | { type: 'tool_call'; call: LLMToolCall }
+  | { type: 'tool_result'; result: LLMToolResult }
+  | { type: 'usage'; usage: LLMUsage }
   | { type: 'done' }
 
 export interface ParserResult {

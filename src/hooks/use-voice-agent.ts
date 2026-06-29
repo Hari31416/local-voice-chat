@@ -10,11 +10,13 @@ import {
   abortLLMVariant,
   getLLMVariantLoadProgress,
   loadLLMVariant,
-  streamLLMVariant,
+  streamLLMWithToolLoop,
   type LLMRuntimeHandles,
   type LLMStreamEvent,
   unloadStaleLLMVariant,
 } from "@/lib/llm-runtime"
+import { variantSupportsTools } from "@/lib/llm/engine-features"
+import type { LLMToolCall, LLMToolResult } from "@/lib/tools/types"
 import { buildSystemPrompt } from "@/lib/system-prompt"
 import { IS_IOS } from "@/lib/voice-agent-constants"
 import {
@@ -290,15 +292,27 @@ export function useVoiceAgent() {
           ? getVoiceProfile(ttsRef.current.engine, ttsRef.current.voice)
           : null
         const systemPrompt = buildSystemPrompt(lastUserText, ttsEnabled, voiceProfile)
+        const toolsEnabled = variantSupportsTools(selectedVariant)
         let maxTokens = getLLMMaxTokens(selectedVariant, ttsEnabled)
         if (!ttsEnabled && prefsRef.current.useThinking && selectedVariant.capabilities.thinking) {
           maxTokens = Math.max(maxTokens * 4, 2048)
         }
+        if (toolsEnabled) {
+          maxTokens = Math.max(maxTokens * 3, 1024)
+        }
 
         let assistantMessage = ''
         let thinkingMessage = ''
+        let toolCalls: LLMToolCall[] = []
+        let toolResults: LLMToolResult[] = []
 
-        const updateAssistantMessage = (content: string, thinking?: string, metrics?: LLMMetrics) => {
+        const updateAssistantMessage = (
+          content: string,
+          thinking?: string,
+          metrics?: LLMMetrics,
+          nextToolCalls?: LLMToolCall[],
+          nextToolResults?: LLMToolResult[],
+        ) => {
           setMessages((prev) => {
             const copy = [...prev]
             if (copy.length > 0 && copy[copy.length - 1].role === 'assistant') {
@@ -309,6 +323,8 @@ export function useVoiceAgent() {
                 content,
                 thinking: thinking !== undefined ? thinking : prevThinking,
                 metrics: metrics !== undefined ? metrics : prevMetrics,
+                toolCalls: nextToolCalls ?? copy[copy.length - 1].toolCalls,
+                toolResults: nextToolResults ?? copy[copy.length - 1].toolResults,
               }
             }
             return copy
@@ -341,18 +357,26 @@ export function useVoiceAgent() {
                 timeToFirstTokenMs,
                 tokensPerSecond: tokenCount > 1 ? tokensPerSecond : undefined,
                 totalTokens: tokenCount,
-              })
+              }, toolCalls, toolResults)
             } else if (event.type === 'thinking_delta') {
               if (prefsRef.current.useThinking) {
                 const delta = event.text
                 if (!delta) continue
                 thinkingMessage += delta
-                updateAssistantMessage(assistantMessage, thinkingMessage)
+                updateAssistantMessage(assistantMessage, thinkingMessage, undefined, toolCalls, toolResults)
               }
+            } else if (event.type === 'tool_call') {
+              toolCalls = [...toolCalls, event.call]
+              updateAssistantMessage(assistantMessage, thinkingMessage, undefined, toolCalls, toolResults)
+            } else if (event.type === 'tool_result') {
+              toolResults = [...toolResults, event.result]
+              // Continuation round: replace prior thinking so we don't stack confused reasoning.
+              thinkingMessage = ''
+              updateAssistantMessage(assistantMessage, thinkingMessage, undefined, toolCalls, toolResults)
             }
           }
 
-          if (!assistantMessage.trim() && !thinkingMessage.trim()) {
+          if (!assistantMessage.trim() && !thinkingMessage.trim() && toolCalls.length === 0) {
             throw new Error('LLM returned an empty response')
           }
 
@@ -425,19 +449,27 @@ export function useVoiceAgent() {
                 timeToFirstTokenMs,
                 tokensPerSecond: tokenCount > 1 ? tokensPerSecond : undefined,
                 totalTokens: tokenCount,
-              })
+              }, toolCalls, toolResults)
             } else if (event.type === 'thinking_delta') {
               if (prefsRef.current.useThinking) {
                 const delta = event.text
                 if (!delta) continue
                 thinkingMessage += delta
-                updateAssistantMessage(assistantMessage, thinkingMessage)
+                updateAssistantMessage(assistantMessage, thinkingMessage, undefined, toolCalls, toolResults)
               }
+            } else if (event.type === 'tool_call') {
+              toolCalls = [...toolCalls, event.call]
+              updateAssistantMessage(assistantMessage, thinkingMessage, undefined, toolCalls, toolResults)
+            } else if (event.type === 'tool_result') {
+              toolResults = [...toolResults, event.result]
+              // Continuation round: replace prior thinking so we don't stack confused reasoning.
+              thinkingMessage = ''
+              updateAssistantMessage(assistantMessage, thinkingMessage, undefined, toolCalls, toolResults)
             }
           }
           splitter.close()
 
-          if (!assistantMessage.trim() && !thinkingMessage.trim()) {
+          if (!assistantMessage.trim() && !thinkingMessage.trim() && toolCalls.length === 0) {
             throw new Error('LLM returned an empty response')
           }
 
@@ -456,6 +488,8 @@ export function useVoiceAgent() {
                   audioUrl: url,
                   content: assistantMessage,
                   thinking: prefsRef.current.useThinking ? thinkingMessage : undefined,
+                  toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+                  toolResults: toolResults.length > 0 ? toolResults : undefined,
                 }
               }
               return copy
@@ -476,13 +510,18 @@ export function useVoiceAgent() {
 
         const lastUserMsg = [...recentHistory].reverse().find((m) => m.role === 'user')
         await runLLMStream(
-          streamLLMVariant(
+          streamLLMWithToolLoop(
             selectedVariant,
             getLLMHandles(),
             chatMessages,
             systemPrompt,
             lastUserMsg?.image,
-            { maxTokens, thinkingEnabled: prefsRef.current.useThinking },
+            {
+              maxTokens,
+              thinkingEnabled: prefsRef.current.useThinking,
+              toolsEnabled,
+            },
+            abortControllerRef.current?.signal,
           ),
         )
 

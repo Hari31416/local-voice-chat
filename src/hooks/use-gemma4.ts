@@ -186,7 +186,7 @@ export function useGemma4(options: UseGemma4Options = {}) {
       messages: ChatMessage[],
       systemPrompt?: string,
       _imageDataUrl?: string, // Kept for signature compatibility
-      options?: { maxTokens?: number; enable_thinking?: boolean; thinking?: boolean },
+      options?: { maxTokens?: number; thinkingEnabled?: boolean },
     ): AsyncGenerator<string, void, unknown> {
       const model = modelRef.current
 
@@ -200,11 +200,12 @@ export function useGemma4(options: UseGemma4Options = {}) {
       try {
         const chatMessages = formatGemma4Messages(messages, systemPrompt)
         const maxNewTokens = options?.maxTokens ?? 128
+        const thinkingEnabled = options?.thinkingEnabled ?? false
 
         const stream = model.generate(chatMessages, {
           maxNewTokens,
-          enable_thinking: options?.enable_thinking ?? true,
-          thinking: options?.thinking ?? true,
+          enable_thinking: thinkingEnabled,
+          thinking: thinkingEnabled,
         })
 
         for await (const chunk of stream) {

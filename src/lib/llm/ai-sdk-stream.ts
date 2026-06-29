@@ -8,15 +8,30 @@ import {
 import { transformersJS, type TransformersJSLanguageModel } from '@browser-ai/transformers-js'
 import type { PretrainedModelOptions } from '@huggingface/transformers'
 import { webLLM, type WebLLMLanguageModel } from '@browser-ai/web-llm'
+import { buildAiSdkToolSet } from '@/lib/tools/ai-sdk-tools'
+import type { LLMToolCall } from '@/lib/tools/types'
 import type { LLMStreamEvent } from './parsers'
+import {
+  ToolCallStreamParser,
+  normalizeToolCallInput,
+} from './parsers/tools'
 
 export type AiSdkStreamRequest = {
-  messages: { role: 'user' | 'assistant'; content: string }[]
+  messages: RuntimeMessage[]
   systemPrompt?: string
   imageDataUrl?: string
   maxTokens?: number
   thinkingEnabled?: boolean
+  toolsEnabled?: boolean
   modelFamily?: string
+}
+
+export type RuntimeMessage = {
+  role: 'user' | 'assistant' | 'tool'
+  content: string
+  toolCalls?: LLMToolCall[]
+  toolCallId?: string
+  toolName?: string
 }
 
 type AiSdkProvider = 'transformers-js' | 'web-llm'
@@ -82,6 +97,34 @@ function buildMessages(req: AiSdkStreamRequest): ModelMessage[] {
       i === req.messages.length - 1 &&
       Boolean(req.imageDataUrl)
 
+    if (msg.role === 'tool') {
+      messages.push({
+        role: 'tool',
+        content: [
+          {
+            type: 'tool-result',
+            toolCallId: msg.toolCallId ?? 'unknown',
+            toolName: msg.toolName ?? 'unknown',
+            output: { type: 'text', value: msg.content },
+          },
+        ],
+      })
+      continue
+    }
+
+    if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
+      messages.push({
+        role: 'assistant',
+        content: msg.toolCalls.map((call) => ({
+          type: 'tool-call' as const,
+          toolCallId: call.id,
+          toolName: call.name,
+          input: call.arguments,
+        })),
+      })
+      continue
+    }
+
     if (isLastUserWithImage && req.imageDataUrl) {
       messages.push({
         role: 'user',
@@ -101,8 +144,6 @@ function buildMessages(req: AiSdkStreamRequest): ModelMessage[] {
 }
 
 function getReasoningMiddlewareOptions(family?: string) {
-  // Qwen 3.5 and Gemma 4 (Transformers.js) stream reasoning first, then close with
-  // `` — often without an explicit opening tag.
   if (family === 'qwen' || family === 'gemma') {
     return { tagName: 'think', startWithReasoning: true as const }
   }
@@ -117,9 +158,23 @@ function sanitizeThinkingDelta(text: string): string {
   return text
     .replace(new RegExp(THINK_OPEN, 'g'), '')
     .replace(new RegExp(THINK_CLOSE, 'g'), '')
-    .replace(/<think>thought\s*/gi, '')
+    .replace(/<\/?redacted_thinking>/gi, '')
+    .replace(/<\/?thinking>/gi, '')
     .replace(/<\|think\|>\s*/g, '')
     .replace(/<\|channel>thought\s*/gi, '')
+}
+
+/** Strip thinking blocks that leak into the answer channel. */
+function sanitizeAnswerDelta(text: string): string {
+  return text
+    .replace(/<think>[\s\S]*?<\/redacted_thinking>/gi, '')
+    .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
+    .replace(new RegExp(`${THINK_OPEN}[\\s\\S]*?${THINK_CLOSE}`, 'g'), '')
+    .replace(/<\/?redacted_thinking>/gi, '')
+    .replace(/<\/?thinking>/gi, '')
+    .replace(new RegExp(THINK_OPEN, 'g'), '')
+    .replace(new RegExp(THINK_CLOSE, 'g'), '')
+    .trimStart()
 }
 
 export async function* streamAiSdkToEvents(
@@ -129,6 +184,7 @@ export async function* streamAiSdkToEvents(
   abortSignal?: AbortSignal,
 ): AsyncGenerator<LLMStreamEvent, void, unknown> {
   const thinkingEnabled = req.thinkingEnabled ?? false
+  const toolsEnabled = req.toolsEnabled ?? false
   const baseModel = model as unknown as LanguageModel
   const languageModel = thinkingEnabled
     ? wrapLanguageModel({
@@ -139,11 +195,18 @@ export async function* streamAiSdkToEvents(
       })
     : baseModel
 
-  const providerOptions = thinkingEnabled
+  const useProviderThinking =
+    thinkingEnabled && !(toolsEnabled && provider === 'transformers-js')
+
+  const providerOptions = useProviderThinking
     ? provider === 'transformers-js'
       ? { 'transformers-js': { enableThinking: true } }
       : { 'web-llm': { extra_body: { enable_thinking: true } } }
     : undefined
+
+  const tools = toolsEnabled ? buildAiSdkToolSet() : undefined
+  const useTextToolParser = toolsEnabled && provider === 'transformers-js'
+  const textToolParser = useTextToolParser ? new ToolCallStreamParser() : null
 
   const result = streamText({
     model: languageModel as never,
@@ -152,17 +215,62 @@ export async function* streamAiSdkToEvents(
     maxOutputTokens: req.maxTokens,
     abortSignal,
     providerOptions: providerOptions as never,
+    ...(tools ? { tools } : {}),
   })
 
   for await (const part of result.fullStream) {
     if (part.type === 'text-delta' && part.text) {
-      yield { type: 'text_delta', text: part.text }
+      if (textToolParser) {
+        const { text, toolCalls } = textToolParser.process(part.text)
+        for (const call of toolCalls) {
+          yield { type: 'tool_call', call }
+        }
+        const cleaned = sanitizeAnswerDelta(text)
+        if (cleaned) {
+          yield { type: 'text_delta', text: cleaned }
+        }
+      } else {
+        const cleaned = sanitizeAnswerDelta(part.text)
+        if (cleaned) {
+          yield { type: 'text_delta', text: cleaned }
+        }
+      }
     } else if (part.type === 'reasoning-delta' && part.text) {
       const cleaned = sanitizeThinkingDelta(part.text)
       if (cleaned) {
         yield { type: 'thinking_delta', text: cleaned }
       }
+    } else if (part.type === 'tool-call' && !('invalid' in part && part.invalid)) {
+      yield {
+        type: 'tool_call',
+        call: {
+          id: part.toolCallId,
+          name: part.toolName,
+          arguments: normalizeToolCallInput(part.input),
+        },
+      }
+    } else if (part.type === 'finish-step' && part.usage) {
+      yield {
+        type: 'usage',
+        usage: {
+          promptTokens: part.usage.inputTokens,
+          completionTokens: part.usage.outputTokens,
+          totalTokens: part.usage.totalTokens,
+        },
+      }
     } else if (part.type === 'finish') {
+      if (textToolParser) {
+        const { text, toolCalls } = textToolParser.flush()
+        for (const call of toolCalls) {
+          yield { type: 'tool_call', call }
+        }
+        if (text) {
+          const cleaned = sanitizeAnswerDelta(text)
+          if (cleaned) {
+            yield { type: 'text_delta', text: cleaned }
+          }
+        }
+      }
       yield { type: 'done' }
     }
   }

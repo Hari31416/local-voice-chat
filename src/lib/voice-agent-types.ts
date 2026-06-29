@@ -1,5 +1,7 @@
 import { DEFAULT_LLM_ID } from "@/lib/llm-models"
 
+import type { LLMToolCall, LLMToolResult } from '@/lib/tools/types'
+
 export type VoiceAgentStatus =
   | "idle"
   | "loading"
@@ -27,6 +29,8 @@ export interface ChatMessage {
   image?: string
   audioUrl?: string
   metrics?: LLMMetrics
+  toolCalls?: LLMToolCall[]
+  toolResults?: LLMToolResult[]
 }
 
 export interface DebugInfo {

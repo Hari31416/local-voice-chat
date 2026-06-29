@@ -3,7 +3,7 @@ import type { LLMEngineType, LLMModel, LLMVariant } from '@/lib/llm-models'
 export type LLMEngineFeature = 'nativeThinking' | 'nativeTools'
 
 export const ENGINE_FEATURES: Record<LLMEngineType, readonly LLMEngineFeature[]> = {
-  'transformers-js': ['nativeThinking', 'nativeTools'],
+  'transformers-js': ['nativeThinking'],
   webllm: ['nativeThinking', 'nativeTools'],
   'gemma4-kernel': [],
   'lfm2-kernel': [],
@@ -35,6 +35,23 @@ export function variantHasParsedThinking(variant: LLMVariant): boolean {
 
 export function variantHasNativeTools(variant: LLMVariant): boolean {
   return engineHasNativeFeature(variant.engine, 'nativeTools')
+}
+
+export function variantSupportsTools(variant: LLMVariant): boolean {
+  return (
+    variantHasNativeTools(variant) ||
+    variant.engine === 'transformers-js' ||
+    variant.engine === 'gemma4-kernel' ||
+    variant.engine === 'lfm2-kernel'
+  )
+}
+
+export function variantUsesPromptToolFallback(variant: LLMVariant): boolean {
+  return variantSupportsTools(variant) && !variantHasNativeTools(variant)
+}
+
+export function variantHasParsedTools(variant: LLMVariant): boolean {
+  return variantUsesPromptToolFallback(variant)
 }
 
 export function variantSupportsThinkingToggle(variant: LLMVariant): boolean {

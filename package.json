@@ -8,7 +8,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:parsers": "tsx --tsconfig tsconfig.app.json src/lib/llm/parsers/test-parsers.ts",
+    "test:tools": "tsx --tsconfig tsconfig.app.json src/lib/llm/parsers/test-tools.ts",
+    "test": "pnpm test:parsers && pnpm test:tools"
   },
   "dependencies": {
     "@browser-ai/transformers-js": "^2.2.2",
@@ -39,6 +42,7 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^4",
     "tailwindcss": "^4",
+    "tsx": "^4.19.4",
     "typescript": "^5",
     "vite": "^6"
   },

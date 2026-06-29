@@ -3,20 +3,25 @@ import {
   type LLMEngineType,
   getLLMModel,
 } from '@/lib/llm-models'
-import type { AiSdkStreamRequest } from './llm/ai-sdk-stream'
+import {
+  variantSupportsTools,
+  variantUsesPromptToolFallback,
+} from '@/lib/llm/engine-features'
+import { buildToolPromptSection } from '@/lib/tools/registry'
+import { executeToolCalls } from '@/lib/tools/execute'
+import type { LLMToolCall, LLMToolResult } from '@/lib/tools/types'
+import { MAX_TOOL_CALLS_PER_ROUND, MAX_TOOL_ROUNDS } from '@/lib/tools/types'
+import type { AiSdkStreamRequest, RuntimeMessage } from './llm/ai-sdk-stream'
 import { createParser } from './llm/parsers/factory'
+import { ToolCallStreamParser, formatToolResultForPrompt, formatToolCallForPrompt } from './llm/parsers/tools'
 import type { LLMStreamEvent } from './llm/parsers'
 
-export type { LLMStreamEvent }
-
-type RuntimeMessage = {
-  role: 'user' | 'assistant'
-  content: string
-}
+export type { LLMStreamEvent, RuntimeMessage }
 
 type RuntimeStreamOptions = {
   maxTokens?: number
   thinkingEnabled?: boolean
+  toolsEnabled?: boolean
 }
 
 export type LLMBackendHandle = {
@@ -68,17 +73,41 @@ export async function* parseRawStream(
   rawStream: AsyncGenerator<string, void, unknown>,
   family: string,
   thinkingEnabled: boolean,
+  toolsEnabled = false,
 ): AsyncGenerator<LLMStreamEvent, void, unknown> {
   const parser = createParser(family, thinkingEnabled)
+  const toolParser = toolsEnabled ? new ToolCallStreamParser() : null
+
   for await (const chunk of rawStream) {
-    const { textDelta, thinkingDelta } = parser.process(chunk)
-    if (textDelta) {
-      yield { type: 'text_delta', text: textDelta }
+    if (toolParser) {
+      const { text, toolCalls } = toolParser.process(chunk)
+      for (const call of toolCalls) {
+        yield { type: 'tool_call', call }
+      }
+      if (!text) continue
+      const { textDelta, thinkingDelta } = parser.process(text)
+      if (textDelta) yield { type: 'text_delta', text: textDelta }
+      if (thinkingDelta) yield { type: 'thinking_delta', text: thinkingDelta }
+      continue
     }
-    if (thinkingDelta) {
-      yield { type: 'thinking_delta', text: thinkingDelta }
+
+    const { textDelta, thinkingDelta } = parser.process(chunk)
+    if (textDelta) yield { type: 'text_delta', text: textDelta }
+    if (thinkingDelta) yield { type: 'thinking_delta', text: thinkingDelta }
+  }
+
+  if (toolParser) {
+    const { text, toolCalls } = toolParser.flush()
+    for (const call of toolCalls) {
+      yield { type: 'tool_call', call }
+    }
+    if (text) {
+      const { textDelta, thinkingDelta } = parser.process(text)
+      if (textDelta) yield { type: 'text_delta', text: textDelta }
+      if (thinkingDelta) yield { type: 'thinking_delta', text: thinkingDelta }
     }
   }
+
   yield { type: 'done' }
 }
 
@@ -88,15 +117,30 @@ function buildAiSdkRequest(
 ): AiSdkStreamRequest {
   const thinkingEnabled =
     variant.capabilities.thinking && (req.options?.thinkingEnabled ?? false)
+  const toolsEnabled =
+    req.options?.toolsEnabled && variantSupportsTools(variant)
 
   return {
     messages: req.messages,
-    systemPrompt: req.systemPrompt,
+    systemPrompt: augmentSystemPromptForTools(req.systemPrompt, variant, toolsEnabled),
     imageDataUrl: req.imageDataUrl,
     maxTokens: req.options?.maxTokens,
     thinkingEnabled,
+    toolsEnabled,
     modelFamily: getLLMModel(variant.modelId).family,
   }
+}
+
+function augmentSystemPromptForTools(
+  systemPrompt: string | undefined,
+  variant: LLMVariant,
+  toolsEnabled?: boolean,
+): string | undefined {
+  if (!toolsEnabled || !variantUsesPromptToolFallback(variant)) {
+    return systemPrompt
+  }
+  const toolSection = buildToolPromptSection()
+  return systemPrompt ? `${systemPrompt}\n\n${toolSection}` : toolSection
 }
 
 async function* streamAiSdkEngine(
@@ -108,6 +152,44 @@ async function* streamAiSdkEngine(
     throw new Error('AI SDK streaming is not available for this engine')
   }
   yield* handle.chatStreamEvents(buildAiSdkRequest(req, variant))
+}
+
+function appendToolTurn(
+  messages: RuntimeMessage[],
+  calls: LLMToolCall[],
+  results: LLMToolResult[],
+  variant: LLMVariant,
+): RuntimeMessage[] {
+  const next = [...messages]
+
+  if (variantUsesPromptToolFallback(variant)) {
+    for (const call of calls) {
+      next.push({ role: 'assistant', content: formatToolCallForPrompt(call) })
+    }
+    const resultText = results.map((result) => formatToolResultForPrompt(result)).join('\n')
+    next.push({
+      role: 'user',
+      content: `${resultText}\n\nUse the tool result above to answer the user. Do not call the tool again.`,
+    })
+    return next
+  }
+
+  next.push({
+    role: 'assistant',
+    content: '',
+    toolCalls: calls,
+  })
+
+  for (const result of results) {
+    next.push({
+      role: 'tool',
+      content: result.error ? `Error: ${result.error}` : result.content,
+      toolCallId: result.callId,
+      toolName: result.name,
+    })
+  }
+
+  return next
 }
 
 const gemmaKernelEngine: LLMEngineAdapter = {
@@ -122,10 +204,13 @@ const gemmaKernelEngine: LLMEngineAdapter = {
     }
     const thinkingEnabled =
       variant.capabilities.thinking && (req.options?.thinkingEnabled ?? false)
+    const toolsEnabled = Boolean(req.options?.toolsEnabled && variantSupportsTools(variant))
+    const systemPrompt = augmentSystemPromptForTools(req.systemPrompt, variant, toolsEnabled)
     return parseRawStream(
-      handles.gemma4.chatStream(req.messages, req.systemPrompt, undefined, req.options),
+      handles.gemma4.chatStream(req.messages, systemPrompt, undefined, req.options),
       getLLMModel(variant.modelId).family,
       thinkingEnabled,
+      toolsEnabled,
     )
   },
   getLoadProgress: (handles) => handles.gemma4.loadProgress,
@@ -137,14 +222,17 @@ const lfmKernelEngine: LLMEngineAdapter = {
   unload: async (handles) => handles.lfm2.unload(),
   isReady: (_variant, handles) => handles.lfm2.isReady,
   abort: (handles) => handles.lfm2.abort(),
-  stream: (req, _variant, handles) => {
+  stream: (req, variant, handles) => {
     if (!handles.lfm2.chatStream) {
       throw new Error('LFM kernel streaming is not available')
     }
+    const toolsEnabled = Boolean(req.options?.toolsEnabled && variantSupportsTools(variant))
+    const systemPrompt = augmentSystemPromptForTools(req.systemPrompt, variant, toolsEnabled)
     return parseRawStream(
-      handles.lfm2.chatStream(req.messages, req.systemPrompt, req.options),
-      getLLMModel(_variant.modelId).family,
+      handles.lfm2.chatStream(req.messages, systemPrompt, req.options),
+      getLLMModel(variant.modelId).family,
       false,
+      toolsEnabled,
     )
   },
   getLoadProgress: (handles) => handles.lfm2.loadProgress,
@@ -236,4 +324,114 @@ export function streamLLMVariant(
     variant,
     handles,
   )
+}
+
+export async function* streamLLMWithToolLoop(
+  variant: LLMVariant,
+  handles: LLMRuntimeHandles,
+  messages: RuntimeMessage[],
+  systemPrompt: string,
+  imageDataUrl: string | undefined,
+  options: RuntimeStreamOptions,
+  abortSignal?: AbortSignal,
+): AsyncGenerator<LLMStreamEvent, void, unknown> {
+  const toolsEnabled = Boolean(options.toolsEnabled && variantSupportsTools(variant))
+
+  if (!toolsEnabled) {
+    yield* streamLLMVariant(variant, handles, messages, systemPrompt, imageDataUrl, options)
+    return
+  }
+
+  let conversation = [...messages]
+  let round = 0
+  let sawDone = false
+  let toolNudgeAttempted = false
+
+  while (round < MAX_TOOL_ROUNDS) {
+    if (abortSignal?.aborted) {
+      abortLLMVariant(variant, handles)
+      return
+    }
+
+    const roundToolCalls: LLMToolCall[] = []
+    let hadAnswerText = false
+    const roundOptions =
+      toolNudgeAttempted && variant.engine === 'transformers-js'
+        ? { ...options, thinkingEnabled: false }
+        : options
+
+    for await (const event of streamLLMVariant(
+      variant,
+      handles,
+      conversation,
+      systemPrompt,
+      imageDataUrl,
+      roundOptions,
+    )) {
+      if (abortSignal?.aborted) {
+        abortLLMVariant(variant, handles)
+        return
+      }
+
+      if (event.type === 'tool_call') {
+        if (roundToolCalls.length < MAX_TOOL_CALLS_PER_ROUND) {
+          roundToolCalls.push(event.call)
+        }
+        yield event
+        continue
+      }
+
+      if (event.type === 'text_delta' && event.text.trim()) {
+        hadAnswerText = true
+      }
+
+      if (event.type === 'done') {
+        sawDone = true
+        continue
+      }
+
+      yield event
+    }
+
+    if (roundToolCalls.length === 0) {
+      if (
+        !toolNudgeAttempted &&
+        !hadAnswerText &&
+        variantUsesPromptToolFallback(variant)
+      ) {
+        toolNudgeAttempted = true
+        conversation = [
+          ...conversation,
+          {
+            role: 'user',
+            content:
+              'Output ONLY a ```tool_call fence with valid JSON to call the tool. No reasoning or explanation.',
+          },
+        ]
+        imageDataUrl = undefined
+        sawDone = false
+        continue
+      }
+
+      if (!sawDone) {
+        yield { type: 'done' }
+      }
+      return
+    }
+
+    const results = await executeToolCalls(roundToolCalls, { abortSignal })
+    for (const result of results) {
+      yield { type: 'tool_result', result }
+    }
+
+    conversation = appendToolTurn(conversation, roundToolCalls, results, variant)
+    round++
+    sawDone = false
+    imageDataUrl = undefined
+    toolNudgeAttempted = false
+  }
+
+  if (!sawDone) {
+    yield { type: 'done' }
+  }
 }

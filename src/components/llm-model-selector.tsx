@@ -15,6 +15,7 @@ import {
   variantHasNativeThinking,
   variantHasNativeTools,
   variantHasParsedThinking,
+  variantHasParsedTools,
 } from "@/lib/llm/engine-features"
 import {
   filterLLMModels,
@@ -80,7 +81,19 @@ function EngineFeatureBadges({
           )}
         >
           {!compact && <Wrench className="h-2.5 w-2.5" />}
-          Tools
+          Native tools
+        </span>
+      )}
+      {variantHasParsedTools(variant) && (
+        <span
+          className={cn(
+            "inline-flex items-center gap-0.5 rounded border font-medium",
+            compact ? "px-1 py-0 text-[8px]" : "px-1.5 py-0.5 text-[9px]",
+            "bg-amber-500/10 text-amber-300 border-amber-500/25",
+          )}
+        >
+          {!compact && <Wrench className="h-2.5 w-2.5" />}
+          Prompt tools
         </span>
       )}
     </div>
