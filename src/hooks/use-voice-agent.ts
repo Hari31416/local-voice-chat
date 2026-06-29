@@ -3,6 +3,7 @@ import type { SetupSelection } from "@/components/setup-screen"
 import { useTTS } from "@/hooks/use-tts"
 import { useGemma4 } from "@/hooks/use-gemma4"
 import { useWebLLM } from "@/hooks/use-webllm"
+import { useLfm2 } from "@/hooks/use-lfm2"
 import { DEFAULT_LLM_ID, LLM_OPTIONS } from "@/lib/llm-models"
 import { buildSystemPrompt, getMaxTokens } from "@/lib/system-prompt"
 import { IS_IOS } from "@/lib/voice-agent-constants"
@@ -140,8 +141,22 @@ export function useVoiceAgent() {
     },
   })
 
+  const lfm2 = useLfm2({
+    onStatusChange: (llmStatus) => {
+      if (llmStatus === "generating") {
+        setStatus("thinking")
+        setStatusMessage("Thinking...")
+      }
+    },
+    onError: (error) => {
+      console.error("LFM2 error:", error)
+      setStatusMessage(`LLM error: ${error.message}`)
+    },
+  })
+
   const gemma4Ref = useRef(gemma4)
   const webllmRef = useRef(webllm)
+  const lfm2Ref = useRef(lfm2)
   const ttsRef = useRef(tts)
   const selectedLLMIdRef = useRef(selectedLLMId)
   const prefsRef = useRef(prefs)
@@ -150,15 +165,20 @@ export function useVoiceAgent() {
   useEffect(() => {
     gemma4Ref.current = gemma4
     webllmRef.current = webllm
+    lfm2Ref.current = lfm2
     ttsRef.current = tts
     selectedLLMIdRef.current = selectedLLMId
     prefsRef.current = prefs
     setupPhaseRef.current = setupPhase
-  }, [gemma4, webllm, tts, selectedLLMId, prefs, setupPhase])
+  }, [gemma4, webllm, lfm2, tts, selectedLLMId, prefs, setupPhase])
 
   const selectedOption = LLM_OPTIONS.find((o) => o.id === selectedLLMId) || LLM_OPTIONS[0]
   const llmLoadProgress =
-    selectedOption.backend === "gemma4" ? gemma4.loadProgress : webllm.loadProgress
+    selectedOption.backend === "gemma4"
+      ? gemma4.loadProgress
+      : selectedOption.backend === "lfm2"
+        ? lfm2.loadProgress
+        : webllm.loadProgress
 
   const activeLoadProgress: LoadProgress | null =
     prefs.sttEnabled && !debugInfo.sttLoaded
@@ -234,7 +254,7 @@ export function useVoiceAgent() {
           : null
         const systemPrompt = buildSystemPrompt(lastUserText, ttsEnabled, voiceProfile)
         const maxTokens = getMaxTokens(
-          option.backend === "gemma4" ? "gemma4" : "webllm",
+          option.backend,
           ttsEnabled,
         )
 
@@ -357,6 +377,18 @@ export function useVoiceAgent() {
           await runLLMStream(
             currentGemma4.chatStream(chatMessages, systemPrompt, lastUserImage, { maxTokens }),
           )
+        } else if (option.backend === 'lfm2') {
+          const currentLfm2 = lfm2Ref.current
+          if (!currentLfm2.isReady) {
+            throw new Error('Liquid LFM 2.5 is not loaded')
+          }
+          console.debug(
+            `[Voice] Using Liquid LFM 2.5 (${option.name}), history: ${recentHistory.length}/${conversationHistory.length}`
+          )
+
+          await runLLMStream(
+            currentLfm2.chatStream(chatMessages, systemPrompt, { maxTokens }),
+          )
         } else {
           const currentWebllm = webllmRef.current
           if (!currentWebllm.isReady) {
@@ -428,6 +460,9 @@ export function useVoiceAgent() {
       if (option.backend === "gemma4") {
         setStatusMessage("Loading Gemma 4 E2B LLM (~3.2GB)...")
         llmReady = await gemma4Ref.current.loadModel()
+      } else if (option.backend === "lfm2") {
+        setStatusMessage(`Loading ${option.name} LLM (${option.sizeLabel})...`)
+        llmReady = await lfm2Ref.current.loadModel(option.lfmModelId || "")
       } else {
         setStatusMessage(`Loading ${option.name} LLM (${option.sizeLabel})...`)
         llmReady = await webllmRef.current.loadModel(option.webllmId as never)
@@ -542,6 +577,8 @@ export function useVoiceAgent() {
                 LLM_OPTIONS.find((o) => o.id === selectedLLMIdRef.current) || LLM_OPTIONS[0]
               if (currentOption.backend === "gemma4") {
                 gemma4Ref.current.abort()
+              } else if (currentOption.backend === "lfm2") {
+                lfm2Ref.current.abort()
               } else {
                 webllmRef.current.abort()
               }
@@ -671,16 +708,16 @@ export function useVoiceAgent() {
       const newOption = LLM_OPTIONS.find((o) => o.id === newModelId)
 
       if (oldOption && newOption) {
-        if (oldOption.backend === "gemma4" && newOption.backend === "webllm") {
-          await gemma4Ref.current.unload()
-        } else if (oldOption.backend === "webllm" && newOption.backend === "gemma4") {
-          await webllmRef.current.unload()
-        } else if (
-          oldOption.backend === "webllm" &&
-          newOption.backend === "webllm" &&
-          oldOption.webllmId !== newOption.webllmId
-        ) {
-          await webllmRef.current.unload()
+        if (oldOption.backend !== newOption.backend) {
+          if (oldOption.backend === "gemma4") await gemma4Ref.current.unload()
+          else if (oldOption.backend === "webllm") await webllmRef.current.unload()
+          else if (oldOption.backend === "lfm2") await lfm2Ref.current.unload()
+        } else {
+          if (oldOption.backend === "webllm" && oldOption.webllmId !== newOption.webllmId) {
+            await webllmRef.current.unload()
+          } else if (oldOption.backend === "lfm2" && oldOption.lfmModelId !== newOption.lfmModelId) {
+            await lfm2Ref.current.unload()
+          }
         }
       }
 
@@ -689,6 +726,9 @@ export function useVoiceAgent() {
         if (newOption?.backend === "gemma4") {
           setStatusMessage("Loading Gemma 4 E2B LLM (~3.2GB)...")
           llmReady = await gemma4Ref.current.loadModel()
+        } else if (newOption?.backend === "lfm2") {
+          setStatusMessage(`Loading ${newOption.name} LLM (${newOption.sizeLabel})...`)
+          llmReady = await lfm2Ref.current.loadModel(newOption.lfmModelId || "")
         } else if (newOption) {
           setStatusMessage(`Loading ${newOption.name} LLM (${newOption.sizeLabel})...`)
           llmReady = await webllmRef.current.loadModel(newOption.webllmId as never)
@@ -796,6 +836,8 @@ export function useVoiceAgent() {
       LLM_OPTIONS.find((o) => o.id === selectedLLMIdRef.current) || LLM_OPTIONS[0]
     if (option.backend === "gemma4") {
       gemma4Ref.current.abort()
+    } else if (option.backend === "lfm2") {
+      lfm2Ref.current.abort()
     } else {
       webllmRef.current.abort()
     }
@@ -830,6 +872,7 @@ export function useVoiceAgent() {
 
     await gemma4Ref.current.unload()
     await webllmRef.current.unload()
+    await lfm2Ref.current.unload()
 
     clearPreferences()
     const resetPrefs = { ...DEFAULT_PREFERENCES }

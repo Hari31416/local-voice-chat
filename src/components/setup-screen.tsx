@@ -188,7 +188,9 @@ export function SetupScreen({
                     <p className="text-[10px] text-zinc-500 line-clamp-1">
                       {opt.backend === 'gemma4'
                         ? 'Multimodal WebGPU model with vision'
-                        : 'Optimized text-only WebLLM'}
+                        : opt.backend === 'lfm2'
+                          ? 'Optimized Liquid hybrid model (extreme speed)'
+                          : 'Optimized text-only WebLLM'}
                     </p>
                   </div>
                   <div className="text-[11px] font-bold text-zinc-400">{opt.sizeLabel}</div>
