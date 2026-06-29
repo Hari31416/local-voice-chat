@@ -45,6 +45,7 @@ interface ControlBarProps {
   voiceOptions: VoiceOption[]
   waveformActive: boolean
   waveformProcessing: boolean
+  waveformAnalyser?: AnalyserNode | null
   canAttachImage: boolean
   onTextInputChange: (value: string) => void
   hindiTypingEnabled: boolean
@@ -77,6 +78,7 @@ export function ControlBar({
   voiceOptions,
   waveformActive,
   waveformProcessing,
+  waveformAnalyser,
   canAttachImage,
   onTextInputChange,
   hindiTypingEnabled,
@@ -150,6 +152,7 @@ export function ControlBar({
                   <LiveWaveform
                     active={waveformActive}
                     processing={waveformProcessing}
+                    sharedAnalyser={waveformAnalyser}
                     barWidth={3}
                     barGap={2}
                     barRadius={1.5}

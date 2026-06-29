@@ -136,6 +136,7 @@ export default function App() {
               voiceOptions={agent.voiceOptions}
               waveformActive={agent.waveformActive}
               waveformProcessing={agent.waveformProcessing}
+              waveformAnalyser={agent.waveformAnalyser}
               canAttachImage={hasLLMCapability(agent.selectedOption, "vision")}
               onTextInputChange={agent.setTextInput}
               hindiTypingEnabled={agent.prefs.hindiTypingEnabled}

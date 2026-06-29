@@ -5,6 +5,7 @@ import {
   streamAiSdkToEvents,
   type AiSdkStreamRequest,
 } from '@/lib/llm/ai-sdk-stream'
+import { disposeWebLLMModel } from '@/lib/llm/dispose-model'
 import type { LLMStreamEvent } from '@/lib/llm/parsers'
 
 export type WebLLMStatus = 'idle' | 'loading' | 'ready' | 'generating' | 'error'
@@ -56,6 +57,11 @@ export function useWebLLM(options: UseWebLLMOptions = {}) {
       loadingRef.current = true
       updateStatus('loading')
       setLoadProgress(0)
+
+      const previous = modelRef.current
+      if (previous) {
+        await disposeWebLLMModel(previous)
+      }
       modelRef.current = null
       currentModelRef.current = null
 
@@ -131,6 +137,10 @@ export function useWebLLM(options: UseWebLLMOptions = {}) {
   const unload = useCallback(async () => {
     abortRef.current?.abort()
     abortRef.current = null
+    const previous = modelRef.current
+    if (previous) {
+      await disposeWebLLMModel(previous)
+    }
     modelRef.current = null
     currentModelRef.current = null
     setCurrentModel(null)

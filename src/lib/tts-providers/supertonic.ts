@@ -18,16 +18,28 @@ let enginePromise: Promise<{
   backend: "webgpu" | "wasm"
 }> | null = null
 
+let activeEngine: {
+  textToSpeech: TextToSpeech
+  backend: "webgpu" | "wasm"
+} | null = null
+
 const styleCache = new Map<SupertonicVoice, Style>()
 
 export async function loadSupertonicEngine(progressCallback?: LoadProgressCallback) {
-  return (enginePromise ??= loadTextToSpeech(ONNX_DIR, (info) => {
+  if (enginePromise) return enginePromise
+
+  enginePromise = loadTextToSpeech(ONNX_DIR, (info) => {
     progressCallback?.({
       model: info.model,
       progress: Math.round((info.current / info.total) * 100),
       backend: info.backend,
     })
-  }))
+  }).then((loaded) => {
+    activeEngine = loaded
+    return loaded
+  })
+
+  return enginePromise
 }
 
 export async function loadSupertonicVoice(voice: SupertonicVoice): Promise<Style> {
@@ -79,6 +91,14 @@ export async function synthesizeSupertonic(
 }
 
 export async function unloadSupertonic(): Promise<void> {
+  if (activeEngine) {
+    try {
+      await activeEngine.textToSpeech.release()
+    } catch (error) {
+      console.warn('[Supertonic] Failed to release ONNX sessions:', error)
+    }
+    activeEngine = null
+  }
   enginePromise = null
   styleCache.clear()
 }

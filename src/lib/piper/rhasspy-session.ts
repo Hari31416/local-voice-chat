@@ -36,43 +36,54 @@ const wasmPaths = {
   piperWasm: `${PIPER_WASM_BASE}.wasm`,
 }
 
-/** Pre-load espeak-ng WASM so the first utterance isn't penalized. */
-let phonemizeWarmup: Promise<void> | null = null
+let phonemizerModule: { callMain: (args: string[]) => void } | null = null
+let phonemizeChain: Promise<unknown> = Promise.resolve()
+let pendingResolve: ((ids: number[]) => void) | null = null
+let pendingReject: ((error: Error) => void) | null = null
 
-function warmPhonemizer(): Promise<void> {
-  return (phonemizeWarmup ??= import("piper-phonemize-internal").then(
-    async ({ createPiperPhonemize }) => {
-      const module = await (createPiperPhonemize as PiperPhonemizeFactory)({
-        print: () => {},
-        printErr: () => {},
-        locateFile: (url) => {
-          if (url.endsWith(".wasm")) return wasmPaths.piperWasm
-          if (url.endsWith(".data")) return wasmPaths.piperData
-          return url
-        },
-      })
-      module.callMain(["-l", "en-us", "--input", '[" "]', "--espeak_data", "/espeak-ng-data"])
+async function ensurePhonemizer(): Promise<{ callMain: (args: string[]) => void }> {
+  if (phonemizerModule) return phonemizerModule
+
+  const { createPiperPhonemize } = await import("piper-phonemize-internal")
+  phonemizerModule = await (createPiperPhonemize as PiperPhonemizeFactory)({
+    print: (data) => {
+      pendingResolve?.(JSON.parse(data).phoneme_ids as number[])
+      pendingResolve = null
+      pendingReject = null
     },
-  ).catch(() => {}))
+    printErr: (message) => {
+      pendingReject?.(new Error(message))
+      pendingResolve = null
+      pendingReject = null
+    },
+    locateFile: (url) => {
+      if (url.endsWith(".wasm")) return wasmPaths.piperWasm
+      if (url.endsWith(".data")) return wasmPaths.piperData
+      return url
+    },
+  })
+
+  phonemizerModule.callMain(["-l", "en-us", "--input", '[" "]', "--espeak_data", "/espeak-ng-data"])
+  return phonemizerModule
 }
 
 async function phonemizeText(text: string, espeakVoice: string): Promise<number[]> {
-  const input = JSON.stringify([{ text: text.trim() }])
-  const { createPiperPhonemize } = await import("piper-phonemize-internal")
-
-  return new Promise<number[]>((resolve, reject) => {
-    void (createPiperPhonemize as PiperPhonemizeFactory)({
-      print: (data) => resolve(JSON.parse(data).phoneme_ids as number[]),
-      printErr: (message) => reject(new Error(message)),
-      locateFile: (url) => {
-        if (url.endsWith(".wasm")) return wasmPaths.piperWasm
-        if (url.endsWith(".data")) return wasmPaths.piperData
-        return url
-      },
-    }).then((module) => {
+  const run = async (): Promise<number[]> => {
+    const module = await ensurePhonemizer()
+    const input = JSON.stringify([{ text: text.trim() }])
+    return new Promise<number[]>((resolve, reject) => {
+      pendingResolve = resolve
+      pendingReject = reject
       module.callMain(["-l", espeakVoice, "--input", input, "--espeak_data", "/espeak-ng-data"])
     })
-  })
+  }
+
+  const result = phonemizeChain.then(run)
+  phonemizeChain = result.then(
+    () => undefined,
+    () => undefined,
+  )
+  return result
 }
 
 export async function createRhasspyPiperSession(
@@ -99,7 +110,7 @@ export async function createRhasspyPiperSession(
   const { session: ortSession, backend } = await createOrtSession(ort, modelBuffer, {
     preferWebGpu: false,
   })
-  void warmPhonemizer()
+  void ensurePhonemizer()
 
   progressCallback?.({ model: "Piper voice model", progress: 100, backend })
 
@@ -126,10 +137,18 @@ export async function createRhasspyPiperSession(
         feeds.sid = new ort.Tensor("int64", [0])
       }
 
-      const result = await ortSession.run(feeds)
-      return {
-        pcm: result.output.data as Float32Array,
-        sampleRate: modelConfig.audio.sample_rate,
+      try {
+        const result = await ortSession.run(feeds)
+        const pcm = new Float32Array(result.output.data as Float32Array)
+        result.output.dispose()
+        return {
+          pcm,
+          sampleRate: modelConfig.audio.sample_rate,
+        }
+      } finally {
+        for (const tensor of Object.values(feeds)) {
+          tensor.dispose()
+        }
       }
     },
     async unload() {

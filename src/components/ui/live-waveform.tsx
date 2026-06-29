@@ -25,6 +25,8 @@ export type LiveWaveformProps = HTMLAttributes<HTMLDivElement> & {
   onError?: (error: Error) => void
   onStreamReady?: (stream: MediaStream) => void
   onStreamEnd?: () => void
+  /** Reuse an existing analyser instead of opening a second microphone. */
+  sharedAnalyser?: AnalyserNode | null
 }
 
 export const LiveWaveform = ({
@@ -48,6 +50,7 @@ export const LiveWaveform = ({
   onError,
   onStreamReady,
   onStreamEnd,
+  sharedAnalyser,
   className,
   ...props
 }: LiveWaveformProps) => {
@@ -243,10 +246,19 @@ export const LiveWaveform = ({
         audioContextRef.current.close()
         audioContextRef.current = null
       }
+      if (!sharedAnalyser) {
+        analyserRef.current = null
+      }
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current)
         animationRef.current = 0
       }
+      return
+    }
+
+    if (sharedAnalyser) {
+      analyserRef.current = sharedAnalyser
+      historyRef.current = []
       return
     }
 
@@ -319,6 +331,7 @@ export const LiveWaveform = ({
     onError,
     onStreamReady,
     onStreamEnd,
+    sharedAnalyser,
   ])
 
   // Animation loop

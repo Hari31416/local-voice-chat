@@ -122,6 +122,19 @@ function reportProgress(progress, prefix) {
   }
 }
 
+// ============ Model disposal ============
+async function disposeTranscriber() {
+  if (transcriber?.dispose) {
+    try {
+      await transcriber.dispose()
+    } catch (e) {
+      console.warn("[STT Worker] transcriber.dispose() failed:", e)
+    }
+  }
+  transcriber = null
+  loadedModelId = null
+}
+
 // ============ Model Loading ============
 async function loadModels(modelId = "whisper-base") {
   if (sileroVad && transcriber && loadedModelId === modelId) {
@@ -151,7 +164,7 @@ async function loadModels(modelId = "whisper-base") {
   }
 
   if (!transcriber || loadedModelId !== modelId) {
-    transcriber = null
+    await disposeTranscriber()
     fileProgressMap.clear()
     self.postMessage({ type: "status", status: "loading", message: `Loading STT model (${modelId})...` })
 
@@ -218,6 +231,8 @@ async function vad(buffer) {
 
   const input = new Tensor("float32", buffer, [1, buffer.length])
   const { stateN, output } = await sileroVad({ input, sr: vadSr, state: vadState })
+  input.dispose?.()
+  output?.dispose?.()
   vadState = stateN
 
   const isSpeech = output.data[0]

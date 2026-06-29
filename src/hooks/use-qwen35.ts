@@ -6,6 +6,7 @@ import {
   type AiSdkStreamRequest,
 } from '@/lib/llm/ai-sdk-stream'
 import { isLfmOnnxModel, patchLfmTransformersChatTemplate } from '@/lib/llm/lfm-transformers'
+import { disposeTransformersJSModel } from '@/lib/llm/dispose-model'
 import type { LLMStreamEvent } from '@/lib/llm/parsers'
 
 export const QWEN35_MODELS = {
@@ -55,6 +56,11 @@ export function useQwen35(options: UseQwen35Options = {}) {
       loadingRef.current = true
       updateStatus('loading')
       setLoadProgress(0)
+
+      const previous = modelRef.current
+      if (previous) {
+        await disposeTransformersJSModel(previous)
+      }
       modelRef.current = null
       currentModelRef.current = null
 
@@ -158,6 +164,10 @@ export function useQwen35(options: UseQwen35Options = {}) {
   const unload = useCallback(async () => {
     abortRef.current?.abort()
     abortRef.current = null
+    const previous = modelRef.current
+    if (previous) {
+      await disposeTransformersJSModel(previous)
+    }
     modelRef.current = null
     currentModelRef.current = null
     setCurrentModel(null)

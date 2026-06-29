@@ -37,6 +37,7 @@ import {
 } from '@/lib/user-preferences'
 import { PIPER_VOICES, SUPERTRONIC_VOICES, TTS_ENGINE_OPTIONS, getVoiceProfile } from "@/lib/tts-voices"
 import { resizeImage } from "@/lib/utils"
+import { revokeMessageAudioUrls } from "@/lib/message-audio-urls"
 import { pcmToWav } from "@/lib/piper/wav"
 import { TextSplitterStream } from "@/lib/splitter"
 
@@ -89,10 +90,12 @@ export function useVoiceAgent() {
   const [debugInfo, setDebugInfo] = useState<DebugInfo>(INITIAL_DEBUG_INFO)
   const [isSecure, setIsSecure] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
+  const [micAnalyser, setMicAnalyser] = useState<AnalyserNode | null>(null)
 
   const workerRef = useRef<Worker | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const workletNodeRef = useRef<AudioWorkletNode | null>(null)
+  const mediaStreamSourceRef = useRef<MediaStreamAudioSourceNode | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const isCallActiveRef = useRef(false)
   const isMicActiveRef = useRef(false)
@@ -100,6 +103,7 @@ export function useVoiceAgent() {
   const isProcessingRef = useRef(false)
   const abortControllerRef = useRef<AbortController | null>(null)
   const pendingUserInputRef = useRef<string | null>(null)
+  const pendingInputTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const tts = useTTS({
     engine: prefs.ttsEngine,
@@ -244,14 +248,33 @@ export function useVoiceAgent() {
     messagesRef.current = messages
   }, [messages])
 
+  const abortActiveGeneration = useCallback(() => {
+    abortControllerRef.current?.abort()
+    abortLLMVariant(getLLMVariant(selectedVariantIdRef.current), getLLMHandles())
+    abortControllerRef.current = null
+    isProcessingRef.current = false
+    pendingUserInputRef.current = null
+
+    if (pendingInputTimeoutRef.current) {
+      clearTimeout(pendingInputTimeoutRef.current)
+      pendingInputTimeoutRef.current = null
+    }
+  }, [getLLMHandles])
+
   const stopListening = useCallback(() => {
     if (workletNodeRef.current) {
+      workletNodeRef.current.port.onmessage = null
       workletNodeRef.current.disconnect()
       workletNodeRef.current = null
     }
 
+    if (mediaStreamSourceRef.current) {
+      mediaStreamSourceRef.current.disconnect()
+      mediaStreamSourceRef.current = null
+    }
+
     if (audioContextRef.current) {
-      audioContextRef.current.close()
+      void audioContextRef.current.close()
       audioContextRef.current = null
     }
 
@@ -260,6 +283,7 @@ export function useVoiceAgent() {
       streamRef.current = null
     }
 
+    setMicAnalyser(null)
     workerRef.current?.postMessage({ type: "stop" })
   }, [])
 
@@ -579,7 +603,8 @@ export function useVoiceAgent() {
           console.debug("[Voice] Processing pending input:", pendingText)
           const userMessage: ChatMessage = { role: "user", content: pendingText, createdAt: Date.now() }
           setMessages((prev) => [...prev, userMessage])
-          setTimeout(() => {
+          pendingInputTimeoutRef.current = setTimeout(() => {
+            pendingInputTimeoutRef.current = null
             handleLLMResponse([...messagesRef.current, userMessage])
           }, 0)
         }
@@ -821,7 +846,13 @@ export function useVoiceAgent() {
 
   const switchLLM = useCallback(
     async (newVariantId: string) => {
-      if (newVariantId === selectedVariantIdRef.current) return
+      const previousVariantId = selectedVariantIdRef.current
+      if (newVariantId === previousVariantId) return
+
+      abortActiveGeneration()
+      if (prefsRef.current.ttsEnabled) {
+        tts.stop()
+      }
 
       setSelectedVariantId(newVariantId)
       selectedVariantIdRef.current = newVariantId
@@ -840,7 +871,7 @@ export function useVoiceAgent() {
       setStatus("loading")
       setDebugInfo((prev) => ({ ...prev, llmLoaded: false, llmMode: newVariantId }))
 
-      const oldVariant = getLLMVariant(selectedVariantId)
+      const oldVariant = getLLMVariant(previousVariantId)
       const newOption = getLLMOption(newVariantId)
 
       await unloadStaleLLMVariant(oldVariant, newVariant, getLLMHandles())
@@ -864,7 +895,7 @@ export function useVoiceAgent() {
         setStatusMessage(`LLM failed to load: ${err instanceof Error ? err.message : String(err)}`)
       }
     },
-    [selectedVariantId, status, debugInfo.llmLoaded, getLLMHandles],
+    [selectedVariantId, status, debugInfo.llmLoaded, getLLMHandles, abortActiveGeneration, tts],
   )
 
   const handleImageSelect = useCallback(async (file: File) => {
@@ -897,7 +928,14 @@ export function useVoiceAgent() {
       workletNodeRef.current = workletNode
 
       const source = audioContext.createMediaStreamSource(stream)
+      mediaStreamSourceRef.current = source
+
+      const analyser = audioContext.createAnalyser()
+      analyser.fftSize = 256
+      analyser.smoothingTimeConstant = 0.8
+      source.connect(analyser)
       source.connect(workletNode)
+      setMicAnalyser(analyser)
 
       workletNode.port.onmessage = (event) => {
         const { buffer } = event.data
@@ -940,27 +978,25 @@ export function useVoiceAgent() {
     if (prefsRef.current.ttsEnabled) {
       tts.preparePlayback()
     }
+    revokeMessageAudioUrls(messagesRef.current)
     setIsCallActive(true)
     setMessages([])
     await startListening()
   }, [startListening, tts])
 
   const endCall = useCallback(() => {
-    abortControllerRef.current?.abort()
-    abortLLMVariant(getLLMVariant(selectedVariantIdRef.current), getLLMHandles())
-    abortControllerRef.current = null
-    isProcessingRef.current = false
+    abortActiveGeneration()
+    tts.stop()
 
     setIsCallActive(false)
     stopListening()
-    tts.stop()
     setStatus("ready")
     setStatusMessage(getReadyMessage(prefsRef.current))
-  }, [getLLMHandles, stopListening, tts])
+  }, [abortActiveGeneration, stopListening, tts])
 
   const handleResetPreferences = useCallback(async () => {
-    abortControllerRef.current?.abort()
-    isProcessingRef.current = false
+    abortActiveGeneration()
+    revokeMessageAudioUrls(messagesRef.current)
 
     if (isCallActiveRef.current) {
       setIsCallActive(false)
@@ -1003,7 +1039,7 @@ export function useVoiceAgent() {
     }))
     setMessages([])
     setPendingImage(null)
-  }, [tts, stopListening])
+  }, [tts, stopListening, abortActiveGeneration])
 
   const submitTextMessage = useCallback(() => {
     if ((!textInput.trim() && !pendingImage) || status !== "ready") return
@@ -1044,6 +1080,7 @@ export function useVoiceAgent() {
   }, [])
 
   const clearConversation = useCallback(() => {
+    revokeMessageAudioUrls(messagesRef.current)
     setMessages([])
     setPendingImage(null)
     qwen35Ref.current.resetSession()
@@ -1087,11 +1124,19 @@ export function useVoiceAgent() {
 
   useEffect(() => {
     return () => {
+      abortActiveGeneration()
+      revokeMessageAudioUrls(messagesRef.current)
       stopListening()
+      ttsRef.current.stop()
+      void ttsRef.current.reset()
       workerRef.current?.terminate()
       workerRef.current = null
+      void gemma4Ref.current.unload()
+      void webllmRef.current.unload()
+      void lfm2Ref.current.unload()
+      void qwen35Ref.current.unload()
     }
-  }, [stopListening])
+  }, [abortActiveGeneration, stopListening])
 
   const waveformActive =
     status === "listening" || status === "recording"
@@ -1133,6 +1178,7 @@ export function useVoiceAgent() {
     activeLoadProgress,
     waveformActive,
     waveformProcessing,
+    waveformAnalyser: micAnalyser,
     voiceOptions,
     sttLoadProgress,
     sttTranscriptResult,

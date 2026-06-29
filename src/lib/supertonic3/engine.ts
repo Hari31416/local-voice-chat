@@ -184,6 +184,15 @@ export class TextToSpeech {
     this.sampleRate = cfgs.ae.sample_rate;
   }
 
+  async release(): Promise<void> {
+    await Promise.all([
+      this.dpOrt.release(),
+      this.textEncOrt.release(),
+      this.vectorEstOrt.release(),
+      this.vocoderOrt.release(),
+    ]);
+  }
+
   async _infer(
     textList: string[],
     langList: string[],
