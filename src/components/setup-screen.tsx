@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { DEFAULT_LLM_ID, LLM_OPTIONS } from "@/lib/llm-models"
+import { LLMModelSelector } from "@/components/llm-model-selector"
+import { LLM_OPTIONS } from "@/lib/llm-models"
 import { STT_OPTIONS } from "@/lib/stt-models"
 import type { STTModelOption } from "@/lib/stt-models"
 import type { TTSEngine, TTSLanguage } from "@/lib/tts-types"
@@ -146,58 +147,12 @@ export function SetupScreen({
         {/* Left Column: LLM Selection */}
         <section className="sm:col-span-7 space-y-2.5">
           <h2 className="text-zinc-300 text-xs font-semibold uppercase tracking-wider">Language model</h2>
-          <div className="space-y-1.5 max-h-[360px] overflow-y-auto pr-1">
-            {LLM_OPTIONS.map((opt) => {
-              const isRecommended = opt.id === DEFAULT_LLM_ID
-              const sizeInGB = parseFloat(opt.sizeLabel.replace(/[~ GB]/g, ''))
-              const isHeavyForMobile = isMobile && sizeInGB >= 1.5
-              const selected = llmId === opt.id
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setLlmId(opt.id)}
-                  className={cn(
-                    'w-full flex items-center justify-between p-2.5 rounded-lg border text-left transition-all duration-150 cursor-pointer',
-                    selected
-                      ? 'bg-zinc-800/80 border-zinc-500 ring-1 ring-zinc-500/25'
-                      : 'bg-zinc-900/40 border-zinc-800 hover:bg-zinc-900/80 hover:border-zinc-700',
-                  )}
-                >
-                  <div className="flex flex-col gap-0.5">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-semibold text-white text-xs">{opt.name}</span>
-                      <div className="flex items-center gap-1">
-                        {isRecommended && (
-                          <span className="bg-zinc-800 text-zinc-300 text-[8px] font-bold px-1 py-0.5 rounded border border-zinc-700">
-                            Rec
-                          </span>
-                        )}
-                        {opt.supportsVision && (
-                          <span className="bg-zinc-800 text-zinc-300 text-[8px] font-medium px-1 py-0.5 rounded border border-zinc-700">
-                            Vision
-                          </span>
-                        )}
-                        {isHeavyForMobile && (
-                          <span className="bg-red-955/40 text-red-400 text-[8px] font-bold px-1 py-0.5 rounded border border-red-900/30">
-                            Heavy
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <p className="text-[10px] text-zinc-500 line-clamp-1">
-                      {opt.backend === 'gemma4'
-                        ? 'Multimodal WebGPU model with vision'
-                        : opt.backend === 'lfm2'
-                          ? 'Optimized Liquid hybrid model (extreme speed)'
-                          : 'Optimized text-only WebLLM'}
-                    </p>
-                  </div>
-                  <div className="text-[11px] font-bold text-zinc-400">{opt.sizeLabel}</div>
-                </button>
-              )
-            })}
-          </div>
+          <LLMModelSelector
+            selectedId={llmId}
+            onSelect={setLlmId}
+            isMobile={isMobile}
+            variant="setup"
+          />
         </section>
 
         {/* Right Column: Voice I/O & Launch */}

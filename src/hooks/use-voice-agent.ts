@@ -4,6 +4,7 @@ import { useTTS } from "@/hooks/use-tts"
 import { useGemma4 } from "@/hooks/use-gemma4"
 import { useWebLLM } from "@/hooks/use-webllm"
 import { useLfm2 } from "@/hooks/use-lfm2"
+import { useQwen35, type Qwen35ModelId } from "@/hooks/use-qwen35"
 import { DEFAULT_LLM_ID, LLM_OPTIONS } from "@/lib/llm-models"
 import { buildSystemPrompt, getMaxTokens } from "@/lib/system-prompt"
 import { IS_IOS } from "@/lib/voice-agent-constants"
@@ -155,9 +156,23 @@ export function useVoiceAgent() {
     },
   })
 
+  const qwen35 = useQwen35({
+    onStatusChange: (llmStatus) => {
+      if (llmStatus === "generating") {
+        setStatus("thinking")
+        setStatusMessage("Thinking...")
+      }
+    },
+    onError: (error) => {
+      console.error("Qwen35 error:", error)
+      setStatusMessage(`LLM error: ${error.message}`)
+    },
+  })
+
   const gemma4Ref = useRef(gemma4)
   const webllmRef = useRef(webllm)
   const lfm2Ref = useRef(lfm2)
+  const qwen35Ref = useRef(qwen35)
   const ttsRef = useRef(tts)
   const selectedLLMIdRef = useRef(selectedLLMId)
   const prefsRef = useRef(prefs)
@@ -167,11 +182,12 @@ export function useVoiceAgent() {
     gemma4Ref.current = gemma4
     webllmRef.current = webllm
     lfm2Ref.current = lfm2
+    qwen35Ref.current = qwen35
     ttsRef.current = tts
     selectedLLMIdRef.current = selectedLLMId
     prefsRef.current = prefs
     setupPhaseRef.current = setupPhase
-  }, [gemma4, webllm, lfm2, tts, selectedLLMId, prefs, setupPhase])
+  }, [gemma4, webllm, lfm2, qwen35, tts, selectedLLMId, prefs, setupPhase])
 
   const selectedOption = LLM_OPTIONS.find((o) => o.id === selectedLLMId) || LLM_OPTIONS[0]
   const llmLoadProgress =
@@ -179,7 +195,9 @@ export function useVoiceAgent() {
       ? gemma4.loadProgress
       : selectedOption.backend === "lfm2"
         ? lfm2.loadProgress
-        : webllm.loadProgress
+        : selectedOption.backend === "qwen35"
+          ? qwen35.loadProgress
+          : webllm.loadProgress
 
   const activeLoadProgress: LoadProgress | null =
     prefs.sttEnabled && !debugInfo.sttLoaded
@@ -431,6 +449,21 @@ export function useVoiceAgent() {
           await runLLMStream(
             currentLfm2.chatStream(chatMessages, systemPrompt, { maxTokens }),
           )
+        } else if (option.backend === 'qwen35') {
+          const currentQwen35 = qwen35Ref.current
+          if (!currentQwen35.isReady) {
+            throw new Error('Qwen 3.5 is not loaded')
+          }
+          console.debug(
+            `[Voice] Using Qwen 3.5 (${option.name}), history: ${recentHistory.length}/${conversationHistory.length}`
+          )
+
+          const lastUserMsg = [...recentHistory].reverse().find((m) => m.role === 'user')
+          const lastUserImage = lastUserMsg?.image
+
+          await runLLMStream(
+            currentQwen35.chatStream(chatMessages, systemPrompt, lastUserImage, { maxTokens }),
+          )
         } else {
           const currentWebllm = webllmRef.current
           if (!currentWebllm.isReady) {
@@ -505,6 +538,9 @@ export function useVoiceAgent() {
       } else if (option.backend === "lfm2") {
         setStatusMessage(`Loading ${option.name} LLM (${option.sizeLabel})...`)
         llmReady = await lfm2Ref.current.loadModel(option.lfmModelId || "")
+      } else if (option.backend === "qwen35") {
+        setStatusMessage(`Loading ${option.name} LLM (${option.sizeLabel})...`)
+        llmReady = await qwen35Ref.current.loadModel(option.qwen35ModelId as Qwen35ModelId)
       } else {
         setStatusMessage(`Loading ${option.name} LLM (${option.sizeLabel})...`)
         llmReady = await webllmRef.current.loadModel(option.webllmId as never)
@@ -621,6 +657,8 @@ export function useVoiceAgent() {
                 gemma4Ref.current.abort()
               } else if (currentOption.backend === "lfm2") {
                 lfm2Ref.current.abort()
+              } else if (currentOption.backend === "qwen35") {
+                qwen35Ref.current.abort()
               } else {
                 webllmRef.current.abort()
               }
@@ -754,11 +792,17 @@ export function useVoiceAgent() {
           if (oldOption.backend === "gemma4") await gemma4Ref.current.unload()
           else if (oldOption.backend === "webllm") await webllmRef.current.unload()
           else if (oldOption.backend === "lfm2") await lfm2Ref.current.unload()
+          else if (oldOption.backend === "qwen35") await qwen35Ref.current.unload()
         } else {
           if (oldOption.backend === "webllm" && oldOption.webllmId !== newOption.webllmId) {
             await webllmRef.current.unload()
           } else if (oldOption.backend === "lfm2" && oldOption.lfmModelId !== newOption.lfmModelId) {
             await lfm2Ref.current.unload()
+          } else if (
+            oldOption.backend === "qwen35" &&
+            oldOption.qwen35ModelId !== newOption.qwen35ModelId
+          ) {
+            await qwen35Ref.current.unload()
           }
         }
       }
@@ -771,6 +815,9 @@ export function useVoiceAgent() {
         } else if (newOption?.backend === "lfm2") {
           setStatusMessage(`Loading ${newOption.name} LLM (${newOption.sizeLabel})...`)
           llmReady = await lfm2Ref.current.loadModel(newOption.lfmModelId || "")
+        } else if (newOption?.backend === "qwen35") {
+          setStatusMessage(`Loading ${newOption.name} LLM (${newOption.sizeLabel})...`)
+          llmReady = await qwen35Ref.current.loadModel(newOption.qwen35ModelId as Qwen35ModelId)
         } else if (newOption) {
           setStatusMessage(`Loading ${newOption.name} LLM (${newOption.sizeLabel})...`)
           llmReady = await webllmRef.current.loadModel(newOption.webllmId as never)
@@ -880,6 +927,8 @@ export function useVoiceAgent() {
       gemma4Ref.current.abort()
     } else if (option.backend === "lfm2") {
       lfm2Ref.current.abort()
+    } else if (option.backend === "qwen35") {
+      qwen35Ref.current.abort()
     } else {
       webllmRef.current.abort()
     }
@@ -915,6 +964,7 @@ export function useVoiceAgent() {
     await gemma4Ref.current.unload()
     await webllmRef.current.unload()
     await lfm2Ref.current.unload()
+    await qwen35Ref.current.unload()
 
     clearPreferences()
     const resetPrefs = { ...DEFAULT_PREFERENCES }
@@ -965,6 +1015,7 @@ export function useVoiceAgent() {
   const clearConversation = useCallback(() => {
     setMessages([])
     setPendingImage(null)
+    qwen35Ref.current.resetSession()
     tts.stop()
   }, [tts])
 

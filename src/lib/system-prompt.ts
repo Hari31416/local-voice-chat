@@ -43,10 +43,11 @@ export const LLM_MAX_TOKENS = {
   webllm: { voice: 256, text: 1024 },
   gemma4: { voice: 128, text: 512 },
   lfm2: { voice: 256, text: 1024 },
+  qwen35: { voice: 256, text: 1024 },
 } as const
 
 export function getMaxTokens(
-  backend: "webllm" | "gemma4" | "lfm2",
+  backend: "webllm" | "gemma4" | "lfm2" | "qwen35",
   ttsEnabled: boolean,
 ): number {
   return ttsEnabled ? LLM_MAX_TOKENS[backend].voice : LLM_MAX_TOKENS[backend].text

@@ -13,9 +13,9 @@ import {
 } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { HindiTypingInput } from "@/components/hindi-typing-input"
+import { LLMModelSelector } from "@/components/llm-model-selector"
 import { LiveWaveform } from "@/components/ui/live-waveform"
 import type { useTTS } from "@/hooks/use-tts"
-import { LLM_OPTIONS } from "@/lib/llm-models"
 import { SUPERTRONIC_LANGUAGES } from "@/lib/voice-agent-constants"
 import type { SetupPhase, VoiceAgentStatus } from "@/lib/voice-agent-types"
 import type { UserPreferences } from "@/lib/user-preferences"
@@ -45,7 +45,6 @@ interface ControlBarProps {
   voiceOptions: VoiceOption[]
   waveformActive: boolean
   waveformProcessing: boolean
-  selectedOptionName: string
   supportsVision: boolean
   onTextInputChange: (value: string) => void
   hindiTypingEnabled: boolean
@@ -78,7 +77,6 @@ export function ControlBar({
   voiceOptions,
   waveformActive,
   waveformProcessing,
-  selectedOptionName,
   supportsVision,
   onTextInputChange,
   hindiTypingEnabled,
@@ -94,12 +92,10 @@ export function ControlBar({
 }: ControlBarProps) {
   const [showVoiceMenu, setShowVoiceMenu] = useState(false)
   const [showLangMenu, setShowLangMenu] = useState(false)
-  const [showLLMMenu, setShowLLMMenu] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const voiceMenuRef = useRef<HTMLDivElement | null>(null)
   const langMenuRef = useRef<HTMLDivElement | null>(null)
-  const llmMenuRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -110,16 +106,12 @@ export function ControlBar({
       if (showLangMenu && langMenuRef.current && !langMenuRef.current.contains(target)) {
         setShowLangMenu(false)
       }
-      if (showLLMMenu && llmMenuRef.current && !llmMenuRef.current.contains(target)) {
-        setShowLLMMenu(false)
-      }
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setShowVoiceMenu(false)
         setShowLangMenu(false)
-        setShowLLMMenu(false)
       }
     }
 
@@ -130,7 +122,7 @@ export function ControlBar({
       document.removeEventListener("mousedown", handleClickOutside)
       window.removeEventListener("keydown", handleKeyDown)
     }
-  }, [showVoiceMenu, showLangMenu, showLLMMenu])
+  }, [showVoiceMenu, showLangMenu])
 
   if (setupPhase === "selecting") return null
 
@@ -369,53 +361,13 @@ export function ControlBar({
 
               <div className="flex items-center justify-between border-t border-zinc-700/20 pt-1.5 mt-0.5">
                 <div className="flex items-center gap-1">
-                  <div className="relative" ref={llmMenuRef}>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowLLMMenu(!showLLMMenu)}
-                      disabled={status === "loading"}
-                      className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850 gap-1 px-2 h-8 text-[11px] font-medium"
-                    >
-                      <span className="uppercase">
-                        {selectedOptionName.replace(" 3.2", "").replace(" E2B", "")}
-                      </span>
-                      <ChevronDown className="h-3 w-3 opacity-60" />
-                    </Button>
-                    {showLLMMenu && (
-                      <div className="absolute bottom-full mb-2 left-0 bg-zinc-850 border border-zinc-700 rounded-lg shadow-xl p-2 min-w-[180px] z-20">
-                        {LLM_OPTIONS.map((opt) => {
-                          const sizeInGB = parseFloat(opt.sizeLabel.replace(/[~ GB]/g, ""))
-                          const isHeavyForMobile = isMobile && sizeInGB >= 1.5
-                          return (
-                            <button
-                              key={opt.id}
-                              onClick={() => {
-                                void onSwitchLLM(opt.id)
-                                setShowLLMMenu(false)
-                              }}
-                              className={cn(
-                                "w-full text-left px-3 py-2 rounded text-sm hover:bg-zinc-700",
-                                selectedLLMId === opt.id
-                                  ? "bg-zinc-700 text-white"
-                                  : "text-zinc-300",
-                              )}
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="font-medium text-xs text-white">{opt.name}</div>
-                                {isHeavyForMobile && (
-                                  <span className="bg-red-500/20 text-red-300 text-[8px] font-bold px-1 rounded border border-red-500/20 flex-shrink-0">
-                                    Heavy
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-[10px] text-zinc-500">{opt.sizeLabel}</div>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
+                  <LLMModelSelector
+                    selectedId={selectedLLMId}
+                    onSelect={onSwitchLLM}
+                    isMobile={isMobile}
+                    variant="menu"
+                    disabled={status === "loading"}
+                  />
 
                   {prefs.ttsEnabled && prefs.ttsEngine === "supertonic" && (
                     <div className="relative" ref={langMenuRef}>

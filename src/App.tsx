@@ -132,7 +132,6 @@ export default function App() {
               voiceOptions={agent.voiceOptions}
               waveformActive={agent.waveformActive}
               waveformProcessing={agent.waveformProcessing}
-              selectedOptionName={agent.selectedOption.name}
               supportsVision={agent.selectedOption.supportsVision}
               onTextInputChange={agent.setTextInput}
               hindiTypingEnabled={agent.prefs.hindiTypingEnabled}

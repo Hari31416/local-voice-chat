@@ -25,6 +25,8 @@ export function WarningBanners({
   const showMemoryWarning =
     isMobile &&
     (selectedOption.backend === "gemma4" ||
+      (selectedOption.backend === "qwen35" &&
+        (selectedOption.id === "qwen35-2b" || selectedOption.id === "qwen35-4b")) ||
       (selectedOption.webllmId &&
         (selectedOption.webllmId.includes("3B") || selectedOption.webllmId.includes("1.5B")))) &&
     !dismissedWarnings.includes("memory")
