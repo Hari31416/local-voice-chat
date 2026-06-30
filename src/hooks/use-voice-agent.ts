@@ -321,11 +321,14 @@ export function useVoiceAgent() {
           prefsRef.current.experimentalToolsEnabled,
         )
         let maxTokens = getLLMMaxTokens(selectedVariant, ttsEnabled)
-        if (!ttsEnabled && prefsRef.current.useThinking && selectedVariant.capabilities.thinking) {
+        if (ttsEnabled) {
+          maxTokens = Math.max(maxTokens, 512)
+        }
+        if (prefsRef.current.useThinking && selectedVariant.capabilities.thinking) {
           maxTokens = Math.max(maxTokens * 4, 2048)
         }
         if (toolsEnabled) {
-          maxTokens = Math.max(maxTokens * 3, 1024)
+          maxTokens = Math.max(maxTokens * 4, 2048)
         }
 
         let assistantMessage = ''
