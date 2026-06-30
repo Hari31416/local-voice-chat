@@ -1010,6 +1010,11 @@ export function useVoiceAgent() {
     }
   }, [abortActiveGeneration, tts])
 
+  const forceSubmitSTT = useCallback(() => {
+    if (!workerRef.current) return
+    workerRef.current.postMessage({ type: "force_submit" })
+  }, [])
+
   const handleResetPreferences = useCallback(async () => {
     abortActiveGeneration()
     revokeMessageAudioUrls(messagesRef.current)
@@ -1227,5 +1232,6 @@ export function useVoiceAgent() {
     isGenerating,
     switchLLM,
     clearConversation,
+    forceSubmitSTT,
   }
 }

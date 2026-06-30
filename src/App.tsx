@@ -224,6 +224,7 @@ export default function App() {
                 onToggleMic={() => void agent.toggleMic()}
                 onToggleMicMute={agent.toggleMicMute}
                 onSwitchLLM={agent.switchLLM}
+                onForceSubmitSTT={agent.forceSubmitSTT}
               />
             </div>
           )}

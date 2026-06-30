@@ -231,11 +231,16 @@ async function vad(buffer) {
 
   const input = new Tensor("float32", buffer, [1, buffer.length])
   const { stateN, output } = await sileroVad({ input, sr: vadSr, state: vadState })
-  input.dispose?.()
-  output?.dispose?.()
-  vadState = stateN
 
   const isSpeech = output.data[0]
+
+  input.dispose?.()
+  output?.dispose?.()
+
+  const oldState = vadState
+  vadState = stateN
+  oldState?.dispose?.()
+
   return isSpeech > SPEECH_THRESHOLD || (isRecording && isSpeech >= EXIT_THRESHOLD)
 }
 
@@ -360,6 +365,35 @@ async function processAudioChunk(buffer) {
   await dispatchForTranscription()
 }
 
+async function forceSubmit() {
+  const hasPrev = prevBuffers.length > 0
+  const hasCurrent = bufferPointer > 0
+  if (!hasPrev && !hasCurrent) {
+    self.postMessage({ type: "status", status: "listening", message: "Listening..." })
+    return
+  }
+
+  const buffer = BUFFER.slice(0, bufferPointer)
+  const prevLength = prevBuffers.reduce((acc, b) => acc + b.length, 0)
+  const paddedBuffer = new Float32Array(prevLength + buffer.length)
+
+  let offset = 0
+  for (const prev of prevBuffers) {
+    paddedBuffer.set(prev, offset)
+    offset += prev.length
+  }
+  paddedBuffer.set(buffer, offset)
+
+  const text = await transcribe(paddedBuffer)
+
+  if (text && !["", "[BLANK_AUDIO]"].includes(text)) {
+    self.postMessage({ type: "transcript", text, isFinal: true })
+  }
+
+  resetAfterRecording(0)
+  self.postMessage({ type: "status", status: "listening", message: "Listening..." })
+}
+
 // ============ Message Handler ============
 self.onmessage = async (event) => {
   const { type, buffer, modelId } = event.data
@@ -390,6 +424,15 @@ self.onmessage = async (event) => {
         self.postMessage({ type: "transcript_full_result", text })
       } catch (err) {
         self.postMessage({ type: "error", message: err.toString() })
+      }
+      break
+
+    case "force_submit":
+      if (sileroVad && vadState) {
+        while (isProcessing) {
+          await new Promise(resolve => setTimeout(resolve, 10))
+        }
+        await forceSubmit()
       }
       break
 

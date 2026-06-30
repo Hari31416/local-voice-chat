@@ -62,6 +62,7 @@ interface ControlBarProps {
   onToggleMic: () => void
   onToggleMicMute: () => void
   onSwitchLLM: (modelId: string) => void
+  onForceSubmitSTT?: () => void
 }
 
 export function ControlBar({
@@ -97,6 +98,7 @@ export function ControlBar({
   onToggleMic,
   onToggleMicMute,
   onSwitchLLM,
+  onForceSubmitSTT,
 }: ControlBarProps) {
   const [showVoiceMenu, setShowVoiceMenu] = useState(false)
   const [showLangMenu, setShowLangMenu] = useState(false)
@@ -179,6 +181,17 @@ export function ControlBar({
                   />
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {(status === "listening" || status === "recording") && onForceSubmitSTT && (
+                    <Button
+                      onClick={onForceSubmitSTT}
+                      size="icon"
+                      variant="ghost"
+                      className="h-10 w-10 rounded-full text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 flex-shrink-0"
+                      title="Force submit speech"
+                    >
+                      <Send className="h-5 w-5" />
+                    </Button>
+                  )}
                   <Button
                     onClick={onToggleMicMute}
                     size="icon"
@@ -387,6 +400,18 @@ export function ControlBar({
                     }
                   >
                     {isMicActive ? <MicOff className="h-4.5 w-4.5" /> : <Mic className="h-4.5 w-4.5" />}
+                  </Button>
+                )}
+
+                {setupPhase === "ready" && status !== "loading" && hasMicInput && isMicActive && onForceSubmitSTT && (
+                  <Button
+                    type="button"
+                    onClick={onForceSubmitSTT}
+                    size="icon"
+                    className="h-9 w-9 rounded-xl flex-shrink-0 shadow-lg bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-600/20"
+                    title="Force submit speech"
+                  >
+                    <Send className="h-4.5 w-4.5" />
                   </Button>
                 )}
               </div>
