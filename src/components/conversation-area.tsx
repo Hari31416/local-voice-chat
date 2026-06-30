@@ -6,6 +6,7 @@ import {
 } from "@/components/ui/conversation"
 import { Message, MessageContent } from "@/components/ui/message"
 import { SetupScreen, type SetupSelection } from "@/components/setup-screen"
+import { ChatEmptyState } from "@/components/chat-empty-state"
 import { cn } from "@/lib/utils"
 import type { ChatMessage, LoadProgress, SetupPhase, VoiceAgentStatus } from "@/lib/voice-agent-types"
 import { AudioWaveformPlayer } from "@/components/audio-waveform-player"
@@ -65,6 +66,7 @@ interface ConversationAreaProps {
   globalAnalyser: AnalyserNode | null
   onSetupStart: (selection: SetupSelection) => void
   onResetPreferences?: () => void
+  onSampleQuery?: (query: string) => void
 }
 
 export function ConversationArea({
@@ -79,25 +81,21 @@ export function ConversationArea({
   globalAnalyser,
   onSetupStart,
   onResetPreferences,
+  onSampleQuery,
 }: ConversationAreaProps) {
   return (
     <Conversation className={cn("flex-1", setupPhase !== "selecting" && "pb-32")}>
       <ConversationContent
         className={cn(
-          messages.length === 0 && setupPhase !== "selecting" && "min-h-full flex flex-col justify-center",
           messages.length === 0 && setupPhase === "selecting" && "min-h-full flex flex-col justify-start py-4",
-          setupPhase === "selecting" && messages.length === 0 ? "max-w-4xl" : "max-w-4xl px-2 sm:px-4",
-          messages.length > 0 && "pt-16",
-          "mx-auto w-full h-full",
+          messages.length > 0 && "pt-16 pb-4",
         )}
       >
         {messages.length === 0 ? (
           <div
             className={cn(
               "mx-auto w-full",
-              setupPhase === "selecting"
-                ? "min-h-full flex flex-col"
-                : "max-w-xl text-center py-10",
+              setupPhase === "selecting" && "min-h-full flex flex-col",
             )}
           >
             {setupPhase === 'selecting' ? (
@@ -121,44 +119,14 @@ export function ConversationArea({
                 onReset={onResetPreferences}
               />
             ) : (
-              <>
-                <h1 className="font-display text-3xl font-extrabold text-white mb-2 tracking-tight">
-                  WebVoice
-                </h1>
-                <p className="text-zinc-500 text-sm">
-                  {setupPhase === 'loading'
-                    ? statusMessage
-                    : isCallActive
-                      ? 'Start speaking...'
-                      : prefs.sttEnabled && prefs.ttsEnabled
-                        ? 'Click the phone to start a call'
-                        : prefs.sttEnabled
-                          ? 'Click the mic to speak, or type a message'
-                          : 'Type a message to begin'}
-                </p>
-                {setupPhase === "loading" && activeLoadProgress && (
-                  <div className="mt-4 w-64 mx-auto">
-                    <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
-                      {activeLoadProgress.progress > 0 ? (
-                        <div
-                          className={`h-full ${activeLoadProgress.color} transition-all duration-300 rounded-full`}
-                          style={{ width: `${activeLoadProgress.progress}%` }}
-                        />
-                      ) : (
-                        <div
-                          className={`h-full ${activeLoadProgress.color} w-1/3 animate-pulse`}
-                        />
-                      )}
-                    </div>
-                    <p className="text-xs text-zinc-600 mt-1">
-                      {activeLoadProgress.label}:{" "}
-                      {activeLoadProgress.progress > 0
-                        ? `${Math.round(activeLoadProgress.progress)}%`
-                        : "starting..."}
-                    </p>
-                  </div>
-                )}
-              </>
+              <ChatEmptyState
+                setupPhase={setupPhase}
+                prefs={prefs}
+                isCallActive={isCallActive}
+                statusMessage={statusMessage}
+                activeLoadProgress={activeLoadProgress}
+                onSampleQuery={onSampleQuery}
+              />
             )}
           </div>
         ) : (
@@ -174,7 +142,7 @@ export function ConversationArea({
                   <div
                     className={cn(
                       "flex flex-col gap-1.5 w-fit max-w-[92%]",
-                      msg.role === "user" ? "items-end ml-auto" : "items-start",
+                      msg.role === "user" ? "items-end" : "items-start",
                     )}
                   >
                     {msg.image && (

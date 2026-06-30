@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react'
 import { Button } from "@/components/ui/button"
+import { CHAT_COLUMN_CLASS } from "@/components/ui/conversation"
 import { HindiTypingInput } from "@/components/hindi-typing-input"
 import { LLMModelSelector } from "@/components/llm-model-selector"
 import { LiveWaveform } from "@/components/ui/live-waveform"
@@ -135,7 +136,7 @@ export function ControlBar({
 
   return (
     <div className="fixed bottom-0 left-0 right-0 p-4 md:pl-[88px] lg:pl-[236px]">
-      <div className="max-w-4xl mx-auto">
+      <div className={CHAT_COLUMN_CLASS}>
         <div className="glass-panel-strong rounded-2xl p-3 shadow-2xl shadow-black/40">
           {isCallActive ? (
             <div className="flex flex-col gap-3">

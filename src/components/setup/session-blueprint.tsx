@@ -24,10 +24,10 @@ export function SessionBlueprint({ state, className, showBar = true }: SessionBl
   const barPercent = Math.min(100, Math.round((state.totalDownloadMb / 4096) * 100))
 
   return (
-    <div className={cn('glass-panel rounded-2xl p-5 space-y-4', className)}>
+    <div className={cn('glass-panel glass-panel-animated rounded-2xl p-5 space-y-4', className)}>
       <div>
         <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-1">Your session</p>
-        <p className="font-display font-bold text-white text-lg">{presetName}</p>
+        <p key={presetName} className="font-display font-bold text-white text-lg animate-value-flash">{presetName}</p>
       </div>
 
       <dl className="space-y-2.5 text-[11px]">
@@ -66,7 +66,7 @@ export function SessionBlueprint({ state, className, showBar = true }: SessionBl
       <div className="pt-3 border-t border-white/[0.06] space-y-2">
         <div className="flex items-baseline justify-between">
           <span className="text-xs text-zinc-500">Download estimate</span>
-          <span className="font-display font-bold text-emerald-400 text-xl">{state.totalDownloadSizeLabel}</span>
+          <span key={state.totalDownloadSizeLabel} className="font-display font-bold text-emerald-400 text-xl animate-value-flash">{state.totalDownloadSizeLabel}</span>
         </div>
 
         {showBar && (
@@ -74,7 +74,7 @@ export function SessionBlueprint({ state, className, showBar = true }: SessionBl
             <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
               <div
                 className={cn(
-                  'h-full rounded-full transition-all duration-300',
+                  'h-full rounded-full transition-all duration-500 ease-out',
                   barPercent >= 75 ? 'bg-amber-500' : barPercent >= 40 ? 'bg-cyan-500' : 'bg-emerald-500',
                 )}
                 style={{ width: `${Math.max(barPercent, 6)}%` }}

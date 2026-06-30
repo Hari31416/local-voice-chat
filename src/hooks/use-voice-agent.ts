@@ -1057,22 +1057,31 @@ export function useVoiceAgent() {
     setPendingImage(null)
   }, [tts, stopListening, abortActiveGeneration])
 
+  const submitQuery = useCallback(
+    (content: string, image?: string) => {
+      const trimmed = content.trim()
+      if ((!trimmed && !image) || status !== 'ready') return
+      if (prefsRef.current.ttsEnabled) {
+        tts.preparePlayback()
+      }
+      const userMessage: ChatMessage = {
+        role: 'user',
+        content: trimmed,
+        image,
+        createdAt: Date.now(),
+      }
+      setMessages((prev) => [...prev, userMessage])
+      handleLLMResponse([...messagesRef.current, userMessage])
+      setTextInput('')
+      setPendingImage(null)
+    },
+    [status, handleLLMResponse, tts],
+  )
+
   const submitTextMessage = useCallback(() => {
     if ((!textInput.trim() && !pendingImage) || status !== "ready") return
-    if (prefsRef.current.ttsEnabled) {
-      tts.preparePlayback()
-    }
-    const userMessage: ChatMessage = {
-      role: "user",
-      content: textInput.trim(),
-      image: pendingImage || undefined,
-      createdAt: Date.now(),
-    }
-    setMessages((prev) => [...prev, userMessage])
-    handleLLMResponse([...messagesRef.current, userMessage])
-    setTextInput("")
-    setPendingImage(null)
-  }, [textInput, pendingImage, status, handleLLMResponse, tts])
+    submitQuery(textInput.trim(), pendingImage || undefined)
+  }, [textInput, pendingImage, status, submitQuery])
 
   const setHindiTypingEnabled = useCallback((enabled: boolean) => {
     const next = { ...prefsRef.current, hindiTypingEnabled: enabled, configured: true }
@@ -1209,6 +1218,7 @@ export function useVoiceAgent() {
     handleResetPreferences,
     handleImageSelect,
     submitTextMessage,
+    submitQuery,
     toggleMicMute,
     toggleMic,
     startCall,

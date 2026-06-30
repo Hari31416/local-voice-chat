@@ -35,9 +35,9 @@ export function StudioPageHeader({
 
       {/* Desktop: full hero */}
       <div className="hidden md:block text-center space-y-3">
-        <p className={cn('text-[11px] font-semibold uppercase tracking-[0.2em]', eyebrowClass)}>{eyebrow}</p>
-        <h1 className="font-display text-3xl lg:text-4xl font-extrabold text-white tracking-tight">{title}</h1>
-        <p className="text-zinc-500 text-sm max-w-md mx-auto leading-relaxed">{description}</p>
+        <p className={cn('text-[11px] font-semibold uppercase tracking-[0.2em] animate-hero-line', eyebrowClass)}>{eyebrow}</p>
+        <h1 className="font-display text-3xl lg:text-4xl font-extrabold text-white tracking-tight animate-hero-title">{title}</h1>
+        <p className="text-zinc-500 text-sm max-w-md mx-auto leading-relaxed animate-hero-desc">{description}</p>
       </div>
     </>
   )

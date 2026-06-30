@@ -1,7 +1,9 @@
 import { useState } from "react"
 import { AudioLines, Mic, Phone } from "lucide-react"
+import { AmbientBackground } from "@/components/ambient-background"
 import { ConversationArea } from "@/components/conversation-area"
 import { ControlBar } from "@/components/control-bar"
+import { PageTransition } from "@/components/page-transition"
 import { VoiceAgentTopBar } from "@/components/voice-agent-top-bar"
 import { WarningBanners } from "@/components/warning-banners"
 import { useVoiceAgent } from "@/hooks/use-voice-agent"
@@ -55,17 +57,21 @@ export default function App() {
 
   const activeNav = NAV_ITEMS.find((n) => n.id === activeTab)!
 
+  const ambientAccent = activeTab === "voice" ? "voice" : activeTab === "tts" ? "tts" : "stt"
+
   return (
     <div className="app-bg h-screen flex overflow-hidden relative">
+      <AmbientBackground accent={ambientAccent} />
+
       {/* Desktop sidebar */}
       <aside className="hidden md:flex flex-col w-[72px] lg:w-[220px] flex-shrink-0 border-r border-white/[0.06] bg-[oklch(0.12_0.01_260/80%)] backdrop-blur-xl z-50">
         <div className="px-4 lg:px-5 py-5 border-b border-white/[0.06]">
           <div className="flex items-center gap-2.5">
             <div className="relative flex-shrink-0">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20 animate-logo-glow">
                 <AudioLines className="h-4 w-4 text-white" />
               </div>
-              <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-[oklch(0.12_0.01_260)]" />
+              <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-[oklch(0.12_0.01_260)] animate-pulse" />
             </div>
             <div className="hidden lg:block min-w-0">
               <p className="font-display font-bold text-white text-sm leading-tight truncate">WebVoice</p>
@@ -84,16 +90,16 @@ export default function App() {
                 key={item.id}
                 onClick={() => handleTabChange(item.id)}
                 className={cn(
-                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer border",
+                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border",
                   isActive
-                    ? cn(styles.active, "shadow-sm", styles.glow)
-                    : "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]",
+                    ? cn(styles.active, "shadow-sm", styles.glow, "scale-[1.02]")
+                    : "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] hover:translate-x-0.5",
                 )}
               >
                 <Icon className={cn("h-4 w-4 flex-shrink-0", isActive && "drop-shadow-sm")} />
                 <span className="hidden lg:block truncate">{item.label}</span>
                 {isActive && (
-                  <div className={cn("hidden lg:block ml-auto h-1.5 w-1.5 rounded-full flex-shrink-0", styles.dot)} />
+                  <div className={cn("hidden lg:block ml-auto h-1.5 w-1.5 rounded-full flex-shrink-0 animate-pulse", styles.dot)} />
                 )}
               </button>
             )
@@ -151,9 +157,9 @@ export default function App() {
           onDismiss={(id) => setDismissedWarnings((p) => [...p, id])}
         />
 
-        <main className="flex-1 overflow-y-auto min-h-0">
+        <main className="flex flex-1 min-h-0 flex-col overflow-hidden">
           {activeTab === "voice" && (
-            <div className="h-full flex flex-col relative accent-voice">
+            <div className="flex min-h-0 flex-1 flex-col relative accent-voice">
               <ConversationArea
                 messages={agent.messages}
                 setupPhase={agent.setupPhase}
@@ -168,6 +174,7 @@ export default function App() {
                 onResetPreferences={
                   agent.prefs.configured ? () => void agent.handleResetPreferences() : undefined
                 }
+                onSampleQuery={agent.submitQuery}
               />
 
               <VoiceAgentTopBar
@@ -222,13 +229,13 @@ export default function App() {
           )}
 
           {activeTab === "tts" && (
-            <div className="accent-tts">
+            <PageTransition pageKey="tts" className="accent-tts">
               <TTSStudio tts={agent.tts} />
-            </div>
+            </PageTransition>
           )}
 
           {activeTab === "stt" && (
-            <div className="accent-stt">
+            <PageTransition pageKey="stt" className="accent-stt">
               <STTStudio
                 isSttLoaded={agent.debugInfo.sttLoaded}
                 sttLoadProgress={agent.sttLoadProgress}
@@ -240,7 +247,7 @@ export default function App() {
                 transcribeAudioBuffer={agent.transcribeAudioBuffer}
                 sttModelId={agent.prefs.sttModelId}
               />
-            </div>
+            </PageTransition>
           )}
         </main>
       </div>

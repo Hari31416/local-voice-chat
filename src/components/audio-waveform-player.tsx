@@ -198,14 +198,16 @@ export function AudioWaveformPlayer({
       gradient.addColorStop(1, "#22c55e")   // Green
       ctx.fillStyle = gradient
 
-      const barWidth = width / barCount
+      const edgePadding = dotRadius + 1
+      const drawWidth = Math.max(0, width - edgePadding * 2)
+      const barWidth = drawWidth / barCount
       const centerY = height / 2
       const maxDots = Math.floor(height / (dotSize + dotGap))
 
       const progressPercent = duration ? (currentTime / duration) * 100 : 0
 
       for (let i = 0; i < barCount; i++) {
-        const x = i * barWidth + barWidth / 2
+        const x = edgePadding + i * barWidth + barWidth / 2
         const amp = frequencies[i] / 255
         const dotsToDraw = Math.max(1, Math.round(amp * maxDots))
 
@@ -389,11 +391,11 @@ export function AudioWaveformPlayer({
         </Button>
 
         {/* Real-Time Canvas Waveform */}
-        <div className="flex flex-col flex-grow min-w-0 gap-0.5">
+        <div className="flex flex-col flex-1 min-w-0 gap-0.5 overflow-hidden">
           <canvas
             ref={canvasRef}
             onClick={handleWaveformClick}
-            className="h-8 w-full cursor-pointer"
+            className="block h-8 w-full max-w-full cursor-pointer"
           />
 
           {/* Time markers */}
@@ -408,7 +410,7 @@ export function AudioWaveformPlayer({
           onClick={changeSpeed}
           disabled={isGlobalPlaying}
           type="button"
-          className="flex-shrink-0 text-[9px] font-extrabold px-1.5 py-1 rounded-lg bg-zinc-800 border border-zinc-700/40 text-zinc-300 hover:text-white hover:bg-zinc-750 transition-all cursor-pointer disabled:opacity-45 disabled:pointer-events-none"
+          className="flex-shrink-0 min-w-[2.25rem] text-center text-[9px] font-extrabold tabular-nums px-1.5 py-1 rounded-lg bg-zinc-800 border border-zinc-700/40 text-zinc-300 hover:text-white hover:bg-zinc-750 transition-all cursor-pointer disabled:opacity-45 disabled:pointer-events-none"
           title="Playback speed"
         >
           {playbackRate}x
@@ -440,7 +442,7 @@ export function AudioWaveformPlayer({
 
   // Full sandbox studio player view
   return (
-    <div className="bg-zinc-950/60 border border-zinc-850 p-5 rounded-2xl flex flex-col gap-4">
+    <div className="bg-zinc-950/60 border border-zinc-850 p-5 rounded-2xl flex flex-col gap-4 overflow-hidden min-w-0">
       {/* Hidden Audio Element */}
       {src ? (
         <audio
@@ -456,26 +458,28 @@ export function AudioWaveformPlayer({
       )}
 
       {/* Large visual interactive CSS Waveform */}
-      <div className="flex items-center gap-3 w-full">
-        <span className="text-[10px] font-mono text-zinc-500 w-10 text-right">
+      <div className="flex items-center gap-3 w-full min-w-0">
+        <span className="shrink-0 text-[10px] font-mono text-zinc-500 w-10 text-right tabular-nums">
           {formatTime(currentTime)}
         </span>
 
-        <canvas
-          ref={canvasRef}
-          onClick={handleWaveformClick}
-          className="flex-grow h-14 cursor-pointer"
-        />
+        <div className="flex-1 min-w-0 overflow-hidden rounded-lg">
+          <canvas
+            ref={canvasRef}
+            onClick={handleWaveformClick}
+            className="block h-14 w-full max-w-full cursor-pointer"
+          />
+        </div>
 
-        <span className="text-[10px] font-mono text-zinc-500 w-10 text-left">
+        <span className="shrink-0 text-[10px] font-mono text-zinc-500 w-10 text-left tabular-nums">
           {formatTime(duration)}
         </span>
       </div>
 
       {/* Control bar buttons */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-1">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-1 min-w-0">
         {/* Playback Controls (Play/Pause, Rewind, Fast Forward) */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-center gap-3 shrink-0">
           <Button
             onClick={skipBackward}
             variant="ghost"
@@ -511,20 +515,20 @@ export function AudioWaveformPlayer({
         </div>
 
         {/* Settings Controls (Playback speed, Volume slider, WAV download) */}
-        <div className="flex items-center gap-4 flex-wrap justify-center">
+        <div className="flex items-center gap-3 sm:gap-4 flex-nowrap justify-center sm:justify-end min-w-0">
           {/* Playback speed trigger */}
           <button
             onClick={changeSpeed}
             type="button"
-            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-300 hover:text-white transition-all cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 shrink-0 h-9 min-w-[4.5rem] text-xs font-semibold px-3 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer"
             title="Playback Speed"
           >
-            <Gauge className="h-3.5 w-3.5 text-blue-400" />
-            <span>{playbackRate}x</span>
+            <Gauge className="h-3.5 w-3.5 shrink-0 text-blue-400" />
+            <span className="w-8 text-center tabular-nums">{playbackRate}x</span>
           </button>
 
           {/* Volume and Mute toggle */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={toggleMute}
               type="button"
@@ -556,7 +560,7 @@ export function AudioWaveformPlayer({
           <a
             href={src}
             download={`synthesis_output.wav`}
-            className="flex items-center gap-1.5 px-4 py-2 bg-teal-950/15 border border-teal-800/40 hover:bg-teal-950/30 hover:border-teal-500/50 text-teal-300 hover:text-white rounded-xl text-xs font-semibold transition-all shadow-md"
+            className="inline-flex items-center justify-center gap-1.5 shrink-0 h-9 px-4 bg-teal-950/15 border border-teal-800/40 hover:bg-teal-950/30 hover:border-teal-500/50 text-teal-300 hover:text-white rounded-xl text-xs font-semibold transition-colors shadow-md whitespace-nowrap"
           >
             <Download className="h-3.5 w-3.5" />
             <span>Download WAV</span>

@@ -1,6 +1,6 @@
 "use client"
 
-import type { ComponentProps } from "react"
+import type { ComponentProps, ReactNode } from "react"
 import { useCallback } from "react"
 import { ArrowDownIcon } from "lucide-react"
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom"
@@ -8,11 +8,14 @@ import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
+/** Shared chat column width — keep in sync with ControlBar */
+export const CHAT_COLUMN_CLASS = "mx-auto w-full max-w-4xl min-w-0 px-2 sm:px-4"
+
 export type ConversationProps = ComponentProps<typeof StickToBottom>
 
 export const Conversation = ({ className, ...props }: ConversationProps) => (
   <StickToBottom
-    className={cn("relative flex-1 overflow-y-auto", className)}
+    className={cn("relative min-h-0 flex-1", className)}
     style={{
       scrollbarWidth: 'thin',
       scrollbarColor: '#52525b transparent',
@@ -26,13 +29,20 @@ export const Conversation = ({ className, ...props }: ConversationProps) => (
 
 export type ConversationContentProps = ComponentProps<
   typeof StickToBottom.Content
->
+> & {
+  children?: ReactNode
+}
 
 export const ConversationContent = ({
   className,
+  children,
   ...props
 }: ConversationContentProps) => (
-  <StickToBottom.Content className={cn("p-4", className)} {...props} />
+  <StickToBottom.Content className="min-h-full w-full" {...props}>
+    <div className={cn(CHAT_COLUMN_CLASS, className)}>
+      {children}
+    </div>
+  </StickToBottom.Content>
 )
 
 export type ConversationEmptyStateProps = Omit<

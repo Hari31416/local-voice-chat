@@ -15,8 +15,8 @@ export function LaunchActions({ hasSavedConfig, onStart, onReset, compact }: Lau
         id="btn-load-and-start"
         className={
           compact
-            ? 'flex-1 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-bold text-sm py-2 h-10 rounded-xl transition-all cursor-pointer shadow-lg shadow-emerald-500/20 gap-2'
-            : 'flex-1 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-bold text-sm py-2.5 h-11 rounded-xl transition-all duration-200 cursor-pointer shadow-lg shadow-emerald-500/20 active:scale-[0.98] gap-2'
+            ? 'flex-1 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-bold text-sm py-2 h-10 rounded-xl transition-all cursor-pointer shadow-lg shadow-emerald-500/20 gap-2 animate-cta-glow'
+            : 'flex-1 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-bold text-sm py-2.5 h-11 rounded-xl transition-all duration-200 cursor-pointer shadow-lg shadow-emerald-500/20 active:scale-[0.98] gap-2 animate-cta-glow'
         }
         onClick={onStart}
       >

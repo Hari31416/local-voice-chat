@@ -1,4 +1,5 @@
 import { Check } from 'lucide-react'
+import { StaggerGroup, StaggerItem } from '@/components/page-transition'
 import { cn } from '@/lib/utils'
 import { INTERACTION_MODES } from './constants'
 import type { InteractionMode } from './types'
@@ -15,22 +16,22 @@ export function InteractionModePicker({
   variant = 'list',
 }: InteractionModePickerProps) {
   return (
-    <div className={cn(variant === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'grid grid-cols-1 gap-2')}>
-      {INTERACTION_MODES.map((mode) => {
+    <StaggerGroup className={cn(variant === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'grid grid-cols-1 gap-2')}>
+      {INTERACTION_MODES.map((mode, index) => {
         const isActive = activeMode === mode.id
         const Icon = mode.icon
 
         return (
+          <StaggerItem key={mode.id} index={index}>
           <button
-            key={mode.id}
             id={`mode-${mode.id}`}
             type="button"
             onClick={() => onChange(mode.id)}
             className={cn(
-              'w-full rounded-xl border text-left flex transition-all duration-150 cursor-pointer select-none',
+              'card-selectable w-full rounded-xl border text-left flex cursor-pointer select-none',
               variant === 'grid' ? 'p-4 flex-col gap-3' : 'p-3 items-center gap-3',
               isActive
-                ? 'border-emerald-500/40 bg-emerald-500/8'
+                ? 'card-selected border-emerald-500/40 bg-emerald-500/8 shadow-lg shadow-emerald-500/10'
                 : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/[0.1]',
             )}
           >
@@ -47,12 +48,13 @@ export function InteractionModePicker({
                 <div className="font-semibold text-white text-xs sm:text-sm">{mode.label}</div>
                 <p className="text-[11px] text-zinc-500 leading-snug mt-0.5">{mode.desc}</p>
               </div>
-              {isActive && <Check className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0" />}
+              {isActive && <Check className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0 animate-check-pop" />}
             </div>
           </button>
+          </StaggerItem>
         )
       })}
-    </div>
+    </StaggerGroup>
   )
 }
 

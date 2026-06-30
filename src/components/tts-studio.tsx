@@ -6,6 +6,7 @@ import { PIPER_VOICES, SUPERTRONIC_VOICES, TTS_ENGINE_OPTIONS } from "@/lib/tts-
 import { pcmToWav } from "@/lib/piper/wav"
 import { cn } from "@/lib/utils"
 import { AudioWaveformPlayer } from "@/components/audio-waveform-player"
+import { StaggerGroup, StaggerItem } from "@/components/page-transition"
 import { StudioPageHeader, studioPageClass } from "@/components/studio-page-header"
 
 interface TTSStudioProps {
@@ -69,9 +70,10 @@ export function TTSStudio({ tts }: TTSStudioProps) {
         accent="cyan"
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-5">
+      <StaggerGroup className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-5">
         {/* Config panel */}
-        <div className="lg:col-span-2 glass-panel rounded-2xl p-4 sm:p-5 space-y-4 sm:space-y-5">
+        <StaggerItem index={0} className="lg:col-span-2">
+        <div className="glass-panel glass-panel-animated rounded-2xl p-4 sm:p-5 space-y-4 sm:space-y-5 h-full">
           <div className="flex items-center gap-2.5 pb-3 border-b border-white/[0.06]">
             <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400">
               <Settings2 className="h-4 w-4" />
@@ -91,9 +93,9 @@ export function TTSStudio({ tts }: TTSStudioProps) {
                   type="button"
                   onClick={() => handleEngineChange(opt.id as typeof tts.engine)}
                   className={cn(
-                    "p-2.5 rounded-xl border text-xs font-semibold transition-all duration-150 text-center cursor-pointer",
+                    "p-2.5 rounded-xl border text-xs font-semibold transition-all duration-200 text-center cursor-pointer card-selectable",
                     engine === opt.id
-                      ? "border-cyan-500/40 bg-cyan-500/8 text-cyan-300"
+                      ? "card-selected border-cyan-500/40 bg-cyan-500/8 text-cyan-300"
                       : "border-white/[0.06] bg-white/[0.02] text-zinc-500 hover:border-white/[0.12] hover:text-zinc-300",
                   )}
                 >
@@ -112,9 +114,9 @@ export function TTSStudio({ tts }: TTSStudioProps) {
                   type="button"
                   onClick={() => setVoice(v.id)}
                   className={cn(
-                    "w-full p-3 rounded-xl border text-left transition-all duration-150 flex flex-col gap-0.5 cursor-pointer",
+                    "w-full p-3 rounded-xl border text-left transition-all duration-200 flex flex-col gap-0.5 cursor-pointer card-selectable",
                     voice === v.id
-                      ? "border-cyan-500/40 bg-cyan-500/8"
+                      ? "card-selected border-cyan-500/40 bg-cyan-500/8"
                       : "border-white/[0.06] bg-white/[0.02] hover:border-white/[0.1] hover:bg-white/[0.04]",
                   )}
                 >
@@ -145,10 +147,11 @@ export function TTSStudio({ tts }: TTSStudioProps) {
             )}
           </div>
         </div>
+        </StaggerItem>
 
         {/* Input + synthesize */}
-        <div className="lg:col-span-3 space-y-4">
-          <div className="glass-panel rounded-2xl p-5 space-y-4 flex flex-col">
+        <StaggerItem index={1} className="lg:col-span-3 space-y-4">
+          <div className="glass-panel glass-panel-animated rounded-2xl p-5 space-y-4 flex flex-col">
             <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-lg bg-white/[0.04] text-zinc-400">
@@ -191,7 +194,7 @@ export function TTSStudio({ tts }: TTSStudioProps) {
               <Button
                 onClick={handleSynthesize}
                 disabled={tts.isSynthesizing || tts.isLoading || !text.trim()}
-                className="flex-1 bg-cyan-500 hover:bg-cyan-400 text-cyan-950 font-bold py-5 rounded-xl shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
+                className="flex-1 bg-cyan-500 hover:bg-cyan-400 text-cyan-950 font-bold py-5 rounded-xl shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all animate-cta-glow-cyan"
               >
                 {tts.isSynthesizing ? (
                   <>
@@ -219,7 +222,7 @@ export function TTSStudio({ tts }: TTSStudioProps) {
           </div>
 
           {wavUrl && (
-            <div className="glass-panel rounded-2xl p-5 space-y-4 animate-fade-up">
+            <div className="glass-panel glass-panel-animated rounded-2xl p-5 space-y-4 animate-fade-up overflow-hidden min-w-0">
               <div className="flex items-center gap-2.5 pb-3 border-b border-white/[0.06]">
                 <Sparkles className="h-4 w-4 text-cyan-400" />
                 <span className="font-semibold text-white text-sm">Generated audio</span>
@@ -227,8 +230,8 @@ export function TTSStudio({ tts }: TTSStudioProps) {
               <AudioWaveformPlayer src={wavUrl} variant="studio" />
             </div>
           )}
-        </div>
-      </div>
+        </StaggerItem>
+      </StaggerGroup>
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react"
 import { Mic, Upload, Copy, Check, FileAudio, AudioLines, RefreshCw, Square, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { StaggerGroup, StaggerItem } from "@/components/page-transition"
 import { StudioPageHeader, studioPageClass } from "@/components/studio-page-header"
 import { cn } from "@/lib/utils"
 import { STT_OPTIONS } from "@/lib/stt-models"
@@ -231,9 +232,9 @@ export function STTStudio({
       />
 
       {!isSttLoaded ? (
-        <div className="glass-panel rounded-2xl p-6 sm:p-10 text-center space-y-5 max-w-lg mx-auto">
+        <div className="glass-panel glass-panel-animated rounded-2xl p-6 sm:p-10 text-center space-y-5 max-w-lg mx-auto">
           <div className="h-16 w-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto">
-            <AudioLines className="h-8 w-8 text-amber-400 animate-pulse" />
+            <AudioLines className="h-8 w-8 text-amber-400 animate-waveform-pulse" />
           </div>
           <div>
             <h2 className="font-display text-lg font-bold text-white mb-1">Load speech model</h2>
@@ -276,7 +277,7 @@ export function STTStudio({
               </div>
               <Button
                 onClick={handleLoadSTT}
-                className="w-full bg-amber-500 hover:bg-amber-400 text-amber-950 font-bold px-6 py-5 rounded-xl text-sm cursor-pointer shadow-lg shadow-amber-500/20"
+                className="w-full bg-amber-500 hover:bg-amber-400 text-amber-950 font-bold px-6 py-5 rounded-xl text-sm cursor-pointer shadow-lg shadow-amber-500/20 animate-cta-glow-amber"
               >
                 Load speech recognition model
               </Button>
@@ -284,9 +285,10 @@ export function STTStudio({
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+        <StaggerGroup className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
           {/* Input panel */}
-          <div className="glass-panel rounded-2xl p-4 sm:p-5 space-y-4 sm:space-y-5">
+          <StaggerItem index={0}>
+          <div className="glass-panel glass-panel-animated rounded-2xl p-4 sm:p-5 space-y-4 sm:space-y-5">
             <div className="space-y-1.5">
               <label className="text-zinc-500 text-[10px] uppercase tracking-wider font-semibold">Active model</label>
               <select
@@ -388,9 +390,11 @@ export function STTStudio({
               </label>
             </div>
           </div>
+          </StaggerItem>
 
           {/* Transcript panel */}
-          <div className="glass-panel rounded-2xl p-5 flex flex-col min-h-[400px]">
+          <StaggerItem index={1}>
+          <div className="glass-panel glass-panel-animated rounded-2xl p-5 flex flex-col min-h-[400px]">
             <div className="flex items-center justify-between pb-3 border-b border-white/[0.06] mb-4">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400">
@@ -481,7 +485,8 @@ export function STTStudio({
               </div>
             )}
           </div>
-        </div>
+          </StaggerItem>
+        </StaggerGroup>
       )}
     </div>
   )
