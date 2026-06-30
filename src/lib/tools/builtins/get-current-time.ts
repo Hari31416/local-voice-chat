@@ -5,21 +5,15 @@ async function executeGetCurrentTime(
   _context: ToolExecutionContext,
 ): Promise<LLMToolResult> {
   const args = input as { timezone?: string }
-  const timezone = args.timezone?.trim()
+  const timezone = args.timezone?.trim() || 'Asia/Kolkata'
 
   try {
     const now = new Date()
-    let content: string
-
-    if (timezone) {
-      content = now.toLocaleString('en-US', {
-        timeZone: timezone,
-        dateStyle: 'full',
-        timeStyle: 'long',
-      })
-    } else {
-      content = now.toISOString()
-    }
+    const content = now.toLocaleString('en-US', {
+      timeZone: timezone,
+      dateStyle: 'full',
+      timeStyle: 'long',
+    })
 
     return {
       callId: '',
@@ -58,7 +52,7 @@ export const getCurrentTimeTool: LLMToolDefinition = {
     properties: {
       timezone: {
         type: 'string',
-        description: 'Optional IANA timezone such as America/New_York or Asia/Kolkata',
+        description: 'Optional IANA timezone such as America/New_York or Asia/Kolkata. Defaults to Asia/Kolkata (IST).',
       },
     },
     additionalProperties: false,

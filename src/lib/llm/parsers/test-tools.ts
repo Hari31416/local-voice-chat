@@ -51,6 +51,16 @@ const invalidCalc = await executeToolCall({
 })
 assertEquals(invalidCalc.error?.includes('invalid'), true, 'calculator rejects unsafe input')
 
+console.log('\n--- Testing Time Tool ---')
+const timeResult = await executeToolCall({
+  id: 'test-time',
+  name: 'get_current_time',
+  arguments: {},
+})
+assertEquals(timeResult.error, undefined, 'time tool execution should not error')
+const hasIstOffset = timeResult.content.includes('GMT+5:30') || timeResult.content.includes('India Standard Time')
+assertEquals(hasIstOffset, true, 'time tool should default to IST timezone (GMT+5:30)')
+
 console.log('\n--- Testing Abort During Tool Execution ---')
 const controller = new AbortController()
 controller.abort()
