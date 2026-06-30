@@ -722,3 +722,58 @@ select, textarea, input[type="text"] {
   border-color: oklch(0.72 0.17 162 / 50%);
   box-shadow: 0 0 0 3px oklch(0.72 0.17 162 / 12%);
 }
+
+/* Active Call Pulsing Animations */
+@keyframes call-pulse-emerald {
+
+  0%,
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.2);
+  }
+
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px 4px rgba(16, 185, 129, 0.4);
+  }
+}
+
+@keyframes call-pulse-teal {
+
+  0%,
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.2);
+  }
+
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px 4px rgba(20, 184, 166, 0.4);
+  }
+}
+
+@keyframes call-pulse-violet {
+
+  0%,
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.2);
+  }
+
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px 4px rgba(139, 92, 246, 0.4);
+  }
+}
+
+.animate-call-pulse-emerald {
+  animation: call-pulse-emerald 3s infinite ease-in-out;
+}
+
+.animate-call-pulse-teal {
+  animation: call-pulse-teal 3s infinite ease-in-out;
+}
+
+.animate-call-pulse-violet {
+  animation: call-pulse-violet 3s infinite ease-in-out;
+}

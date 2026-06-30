@@ -11,6 +11,7 @@ import { TTSStudio } from "@/components/tts-studio"
 import { STTStudio } from "@/components/stt-studio"
 import { hasLLMCapability } from "@/lib/llm-models"
 import { cn } from "@/lib/utils"
+import { ActiveCallScreen } from '@/components/active-call-screen'
 
 type Tab = "voice" | "tts" | "stt"
 
@@ -148,84 +149,105 @@ export default function App() {
           </div>
         </header>
 
-        <WarningBanners
-          isSecure={agent.isSecure}
-          webgpuStatus={agent.debugInfo.webgpu}
-          isMobile={agent.isMobile}
-          selectedOption={agent.selectedOption}
-          dismissedWarnings={dismissedWarnings}
-          onDismiss={(id) => setDismissedWarnings((p) => [...p, id])}
-        />
+        {!agent.isCallActive && (
+          <WarningBanners
+            isSecure={agent.isSecure}
+            webgpuStatus={agent.debugInfo.webgpu}
+            isMobile={agent.isMobile}
+            selectedOption={agent.selectedOption}
+            dismissedWarnings={dismissedWarnings}
+            onDismiss={(id) => setDismissedWarnings((p) => [...p, id])}
+          />
+        )}
 
         <main className="flex flex-1 min-h-0 flex-col overflow-hidden">
           {activeTab === "voice" && (
             <div className="flex min-h-0 flex-1 flex-col relative accent-voice">
-              <ConversationArea
-                messages={agent.messages}
-                setupPhase={agent.setupPhase}
-                prefs={agent.prefs}
-                isMobile={agent.isMobile}
-                statusMessage={agent.statusMessage}
-                isCallActive={agent.isCallActive}
-                activeLoadProgress={agent.activeLoadProgress}
-                agentStatus={agent.status}
-                globalAnalyser={agent.tts.analyser}
-                onSetupStart={agent.handleSetupStart}
-                onResetPreferences={
-                  agent.prefs.configured ? () => void agent.handleResetPreferences() : undefined
-                }
-                onSampleQuery={agent.submitQuery}
-              />
+              {agent.isCallActive ? (
+                <ActiveCallScreen
+                  status={agent.status}
+                  isMicMuted={agent.isMicMuted}
+                  onToggleMicMute={agent.toggleMicMute}
+                  onEndCall={agent.endCall}
+                  waveformActive={agent.waveformActive}
+                  waveformProcessing={agent.waveformProcessing}
+                  waveformAnalyser={agent.waveformAnalyser}
+                  isGenerating={agent.isGenerating}
+                  onStopGeneration={agent.stopGeneration}
+                  onForceSubmitSTT={agent.forceSubmitSTT}
+                  tts={agent.tts}
+                  globalAnalyser={agent.tts.analyser}
+                />
+              ) : (
+                <>
+                  <ConversationArea
+                    messages={agent.messages}
+                    setupPhase={agent.setupPhase}
+                    prefs={agent.prefs}
+                    isMobile={agent.isMobile}
+                    statusMessage={agent.statusMessage}
+                    isCallActive={agent.isCallActive}
+                    activeLoadProgress={agent.activeLoadProgress}
+                    agentStatus={agent.status}
+                    globalAnalyser={agent.tts.analyser}
+                    onSetupStart={agent.handleSetupStart}
+                    onResetPreferences={
+                      agent.prefs.configured ? () => void agent.handleResetPreferences() : undefined
+                    }
+                    onSampleQuery={agent.submitQuery}
+                  />
 
-              <VoiceAgentTopBar
-                hasMessages={agent.messages.length > 0}
-                setupPhase={agent.setupPhase}
-                selectedLLMId={agent.selectedLLMId}
-                selectedVariantId={agent.selectedLLMId}
-                prefs={agent.prefs}
-                debugInfo={agent.debugInfo}
-                tts={agent.tts}
-                onClearConversation={agent.clearConversation}
-                onResetPreferences={agent.handleResetPreferences}
-                onToggleThinking={agent.setUseThinking}
-                onToggleExperimentalTools={agent.setExperimentalToolsEnabled}
-              />
+                  <VoiceAgentTopBar
+                    hasMessages={agent.messages.length > 0}
+                    setupPhase={agent.setupPhase}
+                    selectedLLMId={agent.selectedLLMId}
+                    selectedVariantId={agent.selectedLLMId}
+                    prefs={agent.prefs}
+                    debugInfo={agent.debugInfo}
+                    tts={agent.tts}
+                    onClearConversation={agent.clearConversation}
+                    onResetPreferences={agent.handleResetPreferences}
+                    onToggleThinking={agent.setUseThinking}
+                    onToggleExperimentalTools={agent.setExperimentalToolsEnabled}
+                  />
 
-              <ControlBar
-                setupPhase={agent.setupPhase}
-                status={agent.status}
-                isCallActive={agent.isCallActive}
-                isMicActive={agent.isMicActive}
-                hasCallMode={agent.hasCallMode}
-                hasMicInput={agent.hasMicInput}
-                isMicMuted={agent.isMicMuted}
-                isSecure={agent.isSecure}
-                isMobile={agent.isMobile}
-                textInput={agent.textInput}
-                pendingImage={agent.pendingImage}
-                selectedLLMId={agent.selectedLLMId}
-                prefs={agent.prefs}
-                tts={agent.tts}
-                voiceOptions={agent.voiceOptions}
-                waveformActive={agent.waveformActive}
-                waveformProcessing={agent.waveformProcessing}
-                waveformAnalyser={agent.waveformAnalyser}
-                canAttachImage={hasLLMCapability(agent.selectedOption, "vision")}
-                onTextInputChange={agent.setTextInput}
-                hindiTypingEnabled={agent.prefs.hindiTypingEnabled}
-                onHindiTypingChange={agent.setHindiTypingEnabled}
-                onClearPendingImage={() => agent.setPendingImage(null)}
-                onImageSelect={agent.handleImageSelect}
-                onSubmitText={agent.submitTextMessage}
-                onStartCall={() => void agent.startCall()}
-                onEndCall={agent.endCall}
-                onStopGeneration={agent.stopGeneration}
-                isGenerating={agent.isGenerating}
-                onToggleMic={() => void agent.toggleMic()}
-                onToggleMicMute={agent.toggleMicMute}
-                onSwitchLLM={agent.switchLLM}
-                onForceSubmitSTT={agent.forceSubmitSTT}
-              />
+                  <ControlBar
+                    setupPhase={agent.setupPhase}
+                    status={agent.status}
+                    isCallActive={agent.isCallActive}
+                    isMicActive={agent.isMicActive}
+                    hasCallMode={agent.hasCallMode}
+                    hasMicInput={agent.hasMicInput}
+                    isMicMuted={agent.isMicMuted}
+                    isSecure={agent.isSecure}
+                    isMobile={agent.isMobile}
+                    textInput={agent.textInput}
+                    pendingImage={agent.pendingImage}
+                    selectedLLMId={agent.selectedLLMId}
+                    prefs={agent.prefs}
+                    tts={agent.tts}
+                    voiceOptions={agent.voiceOptions}
+                    waveformActive={agent.waveformActive}
+                    waveformProcessing={agent.waveformProcessing}
+                    waveformAnalyser={agent.waveformAnalyser}
+                    canAttachImage={hasLLMCapability(agent.selectedOption, "vision")}
+                    onTextInputChange={agent.setTextInput}
+                    hindiTypingEnabled={agent.prefs.hindiTypingEnabled}
+                    onHindiTypingChange={agent.setHindiTypingEnabled}
+                    onClearPendingImage={() => agent.setPendingImage(null)}
+                    onImageSelect={agent.handleImageSelect}
+                    onSubmitText={agent.submitTextMessage}
+                    onStartCall={() => void agent.startCall()}
+                    onEndCall={agent.endCall}
+                    onStopGeneration={agent.stopGeneration}
+                    isGenerating={agent.isGenerating}
+                    onToggleMic={() => void agent.toggleMic()}
+                    onToggleMicMute={agent.toggleMicMute}
+                    onSwitchLLM={agent.switchLLM}
+                    onForceSubmitSTT={agent.forceSubmitSTT}
+                  />
+                </>
+              )}
             </div>
           )}
 
