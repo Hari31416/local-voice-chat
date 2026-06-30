@@ -260,7 +260,7 @@ export default function App() {
                     onToggleExperimentalTools={agent.setExperimentalToolsEnabled}
                   />
 
-                  <ControlBar
+                   <ControlBar
                     setupPhase={agent.setupPhase}
                     status={agent.status}
                     isCallActive={agent.isCallActive}
@@ -294,7 +294,8 @@ export default function App() {
                     onToggleMicMute={agent.toggleMicMute}
                     onSwitchLLM={agent.switchLLM}
                     onForceSubmitSTT={agent.forceSubmitSTT}
-                  />
+                    isSidebarCollapsed={isSidebarCollapsed}
+                   />
                 </>
               )}
             </div>

@@ -63,6 +63,7 @@ interface ControlBarProps {
   onToggleMicMute: () => void
   onSwitchLLM: (modelId: string) => void
   onForceSubmitSTT?: () => void
+  isSidebarCollapsed?: boolean
 }
 
 export function ControlBar({
@@ -99,6 +100,7 @@ export function ControlBar({
   onToggleMicMute,
   onSwitchLLM,
   onForceSubmitSTT,
+  isSidebarCollapsed = false,
 }: ControlBarProps) {
   const [showVoiceMenu, setShowVoiceMenu] = useState(false)
   const [showLangMenu, setShowLangMenu] = useState(false)
@@ -137,7 +139,10 @@ export function ControlBar({
   if (setupPhase === "selecting") return null
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 p-4 md:pl-[88px] lg:pl-[236px]">
+    <div className={cn(
+      "fixed bottom-0 left-0 right-0 p-4 transition-all duration-300 ease-in-out",
+      isSidebarCollapsed ? "md:pl-4 lg:pl-4" : "md:pl-[88px] lg:pl-[236px]"
+    )}>
       <div className={CHAT_COLUMN_CLASS}>
         <div className="glass-panel-strong rounded-2xl p-3 shadow-2xl shadow-black/40">
           {isCallActive ? (
