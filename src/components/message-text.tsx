@@ -1,3 +1,4 @@
+import { CodeBlock } from '@/components/code-block'
 import Markdown from "react-markdown"
 import type { Components } from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -40,23 +41,18 @@ const markdownComponents: Components = {
       {children}
     </a>
   ),
-  pre: ({ children }) => (
-    <pre className="mb-2 overflow-x-auto rounded-lg bg-zinc-950/80 p-3 text-xs last:mb-0">
-      {children}
-    </pre>
-  ),
+  pre: ({ children }) => <>{children}</>,
   code: ({ className, children, ...props }) => {
-    const isBlock = Boolean(className)
+    const codeStr = String(children).replace(/\n$/, '')
+    const isBlock = Boolean(className) || codeStr.includes('\n')
     if (isBlock) {
-      return (
-        <code className={cn("font-mono text-zinc-200", className)} {...props}>
-          {children}
-        </code>
-      )
+      const match = /language-(\w+)/.exec(className || '')
+      const language = match ? match[1] : 'text'
+      return <CodeBlock code={codeStr} language={language} />
     }
     return (
       <code
-        className="rounded bg-zinc-950/60 px-1 py-0.5 font-mono text-[0.9em] text-zinc-200"
+        className='rounded bg-zinc-950/60 px-1.5 py-0.5 font-mono text-[0.9em] text-zinc-200'
         {...props}
       >
         {children}

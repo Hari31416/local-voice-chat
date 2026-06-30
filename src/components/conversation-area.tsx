@@ -43,8 +43,10 @@ function ThinkingBlock({ thinking, isGenerating }: ThinkingBlockProps) {
         )}
       </button>
       {isExpanded && (
-        <div className="px-3 py-2 text-zinc-400/90 whitespace-pre-wrap leading-relaxed border-t border-zinc-900/40 bg-zinc-950/20 font-mono text-[11px] max-h-60 overflow-y-auto">
-          {thinking}
+        <div className='px-3 py-2 border-t border-zinc-900/40 bg-zinc-950/20 font-mono text-[11px] max-h-60 overflow-y-auto'>
+          <MessageText markdown className='text-zinc-400/90 leading-relaxed font-mono'>
+            {thinking}
+          </MessageText>
         </div>
       )}
     </div>
