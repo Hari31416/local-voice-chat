@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { AudioLines, Mic, Phone } from "lucide-react"
+import { useState, useEffect } from "react"
+import { AudioLines, Mic, Phone, ChevronLeft, ChevronRight } from "lucide-react"
 import { AmbientBackground } from "@/components/ambient-background"
 import { ConversationArea } from "@/components/conversation-area"
 import { ControlBar } from "@/components/control-bar"
@@ -42,6 +42,24 @@ const ACCENT_STYLES: Record<string, { active: string; dot: string; glow: string 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("voice")
   const [dismissedWarnings, setDismissedWarnings] = useState<string[]>([])
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    return localStorage.getItem("sidebar-collapsed") === "true"
+  })
+
+  useEffect(() => {
+    localStorage.setItem("sidebar-collapsed", String(isSidebarCollapsed))
+  }, [isSidebarCollapsed])
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+        e.preventDefault()
+        setIsSidebarCollapsed((prev) => !prev)
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [])
 
   const agent = useVoiceAgent()
 
@@ -65,23 +83,44 @@ export default function App() {
       <AmbientBackground accent={ambientAccent} />
 
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-[72px] lg:w-[220px] flex-shrink-0 border-r border-white/[0.06] bg-[oklch(0.12_0.01_260/80%)] backdrop-blur-xl z-50">
-        <div className="px-4 lg:px-5 py-5 border-b border-white/[0.06]">
-          <div className="flex items-center gap-2.5">
-            <div className="relative flex-shrink-0">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20 animate-logo-glow">
-                <AudioLines className="h-4 w-4 text-white" />
+      <aside className={cn(
+        "hidden md:flex flex-col flex-shrink-0 border-r border-white/[0.06] bg-[oklch(0.12_0.01_260/80%)] backdrop-blur-xl z-50 transition-all duration-300 ease-in-out relative",
+        isSidebarCollapsed ? "w-0 border-r-0 opacity-0 pointer-events-none overflow-hidden" : "w-[72px] lg:w-[220px]"
+      )}>
+        <div className={cn("py-5 border-b border-white/[0.06] transition-all duration-300", isSidebarCollapsed ? "px-0 opacity-0" : "px-4 lg:px-5")}>
+          <div className="flex items-center justify-between gap-2.5 min-w-0">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="relative flex-shrink-0">
+                <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20 animate-logo-glow">
+                  <AudioLines className="h-4 w-4 text-white" />
+                </div>
+                <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-[oklch(0.12_0.01_260)] animate-pulse" />
               </div>
-              <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-[oklch(0.12_0.01_260)] animate-pulse" />
+              <div className="hidden lg:block min-w-0">
+                <p className="font-display font-bold text-white text-sm leading-tight truncate">WebVoice</p>
+                <p className="text-[10px] text-zinc-500 font-medium tracking-wide uppercase">Studio</p>
+              </div>
             </div>
-            <div className="hidden lg:block min-w-0">
-              <p className="font-display font-bold text-white text-sm leading-tight truncate">WebVoice</p>
-              <p className="text-[10px] text-zinc-500 font-medium tracking-wide uppercase">Studio</p>
-            </div>
+            <button
+              onClick={() => setIsSidebarCollapsed(true)}
+              className="hidden lg:flex p-1.5 hover:bg-white/[0.04] rounded-lg text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer flex-shrink-0"
+              title="Collapse Sidebar (Cmd+B)"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
           </div>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className={cn("flex-1 space-y-1 transition-all duration-300", isSidebarCollapsed ? "p-0 opacity-0" : "p-3")}>
+          {/* Collapse button for narrow sidebar */}
+          <button
+            onClick={() => setIsSidebarCollapsed(true)}
+            className="lg:hidden w-full flex items-center justify-center px-3 py-2.5 mb-2 rounded-xl border border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] transition-all duration-300 cursor-pointer"
+            title="Collapse Sidebar (Cmd+B)"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon
             const isActive = activeTab === item.id
@@ -107,7 +146,7 @@ export default function App() {
           })}
         </nav>
 
-        <div className="hidden lg:block p-4 border-t border-white/[0.06]">
+        <div className={cn("hidden lg:block border-t border-white/[0.06] transition-all duration-300", isSidebarCollapsed ? "p-0 opacity-0" : "p-4")}>
           <p className="text-[10px] text-zinc-600 leading-relaxed">
             100% local · runs in your browser · no API keys
           </p>
@@ -116,6 +155,16 @@ export default function App() {
 
       {/* Main column */}
       <div className="flex-1 flex flex-col min-w-0 relative z-10">
+        {/* Floating expand button when sidebar is collapsed */}
+        {isSidebarCollapsed && (
+          <button
+            onClick={() => setIsSidebarCollapsed(false)}
+            className="hidden md:flex absolute top-4 left-4 z-40 p-2 bg-[oklch(0.12_0.01_260/80%)] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl text-zinc-400 hover:text-white transition-all duration-300 shadow-lg cursor-pointer"
+            title="Expand Sidebar (Cmd+B)"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        )}
         {/* Mobile header + tab bar */}
         <header className="md:hidden flex-shrink-0 border-b border-white/[0.06] bg-[oklch(0.12_0.01_260/90%)] backdrop-blur-xl">
           <div className="flex items-center justify-between px-4 py-3">
