@@ -997,6 +997,19 @@ export function useVoiceAgent() {
     setStatusMessage(getReadyMessage(prefsRef.current))
   }, [abortActiveGeneration, stopListening, tts])
 
+  const stopGeneration = useCallback(() => {
+    abortActiveGeneration()
+    tts.stop()
+
+    if (isCallActiveRef.current || isMicActiveRef.current) {
+      setStatus("listening")
+      setStatusMessage("Listening...")
+    } else {
+      setStatus("ready")
+      setStatusMessage(getReadyMessage(prefsRef.current))
+    }
+  }, [abortActiveGeneration, tts])
+
   const handleResetPreferences = useCallback(async () => {
     abortActiveGeneration()
     revokeMessageAudioUrls(messagesRef.current)
@@ -1146,6 +1159,9 @@ export function useVoiceAgent() {
   const waveformProcessing =
     status === "speaking" || status === "thinking" || status === "transcribing"
 
+  const isGenerating =
+    status === "thinking" || status === "synthesizing" || status === "speaking"
+
   const hasCallMode = prefs.sttEnabled && prefs.ttsEnabled
   const hasMicInput = prefs.sttEnabled && !prefs.ttsEnabled
 
@@ -1197,6 +1213,8 @@ export function useVoiceAgent() {
     toggleMic,
     startCall,
     endCall,
+    stopGeneration,
+    isGenerating,
     switchLLM,
     clearConversation,
   }

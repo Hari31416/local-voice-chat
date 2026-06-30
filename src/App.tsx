@@ -146,6 +146,8 @@ export default function App() {
               onSubmitText={agent.submitTextMessage}
               onStartCall={() => void agent.startCall()}
               onEndCall={agent.endCall}
+              onStopGeneration={agent.stopGeneration}
+              isGenerating={agent.isGenerating}
               onToggleMic={() => void agent.toggleMic()}
               onToggleMicMute={agent.toggleMicMute}
               onSwitchLLM={agent.switchLLM}

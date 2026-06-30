@@ -4,11 +4,11 @@ import {
   extractReasoningMiddleware,
   type LanguageModel,
   type ModelMessage,
+  type StreamTextResult,
 } from 'ai'
-import { transformersJS, type TransformersJSLanguageModel } from '@browser-ai/transformers-js'
-import type { PretrainedModelOptions } from '@huggingface/transformers'
-import { webLLM, type WebLLMLanguageModel } from '@browser-ai/web-llm'
-import { buildAiSdkToolSet } from '@/lib/tools/ai-sdk-tools'
+import type { TransformersJSLanguageModel } from '@browser-ai/transformers-js'
+import type { WebLLMLanguageModel } from '@browser-ai/web-llm'
+import { createTools } from '@/lib/tools/ai-sdk-tools'
 import type { LLMToolCall } from '@/lib/tools/types'
 import type { LLMStreamEvent } from './parsers'
 import {
@@ -39,58 +39,12 @@ export type RuntimeMessage = {
   toolName?: string
 }
 
-type AiSdkProvider = 'transformers-js' | 'web-llm'
+export type AiSdkProvider = 'transformers-js' | 'web-llm'
 
-function isVisionModelId(modelId: string): boolean {
-  const id = modelId.toLowerCase()
-  return (
-    id.includes('qwen3.5') ||
-    id.includes('qwen3_5') ||
-    id.includes('gemma-4') ||
-    id.includes('gemma_4')
-  )
-}
+type BrowserAiModel = TransformersJSLanguageModel | WebLLMLanguageModel
 
-/** Per-model dtype — avoids `auto` loading fp16 weights and blowing past RAM. */
-function resolveTransformersDtype(modelId: string): PretrainedModelOptions['dtype'] {
-  const id = modelId.toLowerCase()
-  if (id.includes('gemma-4') || id.includes('gemma_4')) {
-    return 'q4f16'
-  }
-  if (id.includes('qwen3.5') || id.includes('qwen3_5')) {
-    return {
-      embed_tokens: 'q4',
-      vision_encoder: 'fp16',
-      decoder_model_merged: 'q4',
-    }
-  }
-  return 'q4'
-}
-
-export function createTransformersModel(
-  modelId: string,
-  onProgress?: (pct: number) => void,
-): TransformersJSLanguageModel {
-  return transformersJS(modelId, {
-    device: 'webgpu',
-    dtype: resolveTransformersDtype(modelId),
-    isVisionModel: isVisionModelId(modelId),
-    initProgressCallback: onProgress
-      ? (progress) => onProgress(Math.round(progress * 100))
-      : undefined,
-  })
-}
-
-export function createWebLLMModel(
-  modelId: string,
-  onProgress?: (pct: number) => void,
-): WebLLMLanguageModel {
-  return webLLM(modelId, {
-    initProgressCallback: onProgress
-      ? (report) => onProgress(Math.round((report.progress ?? 0) * 100))
-      : undefined,
-  })
-}
+const THINK_OPEN = '<' + 'think>'
+const THINK_CLOSE = '</' + 'think>'
 
 function buildMessages(req: AiSdkStreamRequest): ModelMessage[] {
   const messages: ModelMessage[] = []
@@ -134,7 +88,11 @@ function buildMessages(req: AiSdkStreamRequest): ModelMessage[] {
       messages.push({
         role: 'user',
         content: [
-          { type: 'image', image: req.imageDataUrl },
+          {
+            type: 'file',
+            mediaType: 'image/jpeg',
+            data: req.imageDataUrl,
+          },
           { type: 'text', text: msg.content || ' ' },
         ],
       })
@@ -148,17 +106,22 @@ function buildMessages(req: AiSdkStreamRequest): ModelMessage[] {
   return messages
 }
 
-function getReasoningMiddlewareOptions(family?: string) {
-  if (family === 'qwen' || family === 'gemma') {
-    return { tagName: 'think', startWithReasoning: true as const }
-  }
-  return { tagName: 'think', startWithReasoning: true as const }
+function wrapModelWithReasoning(
+  model: BrowserAiModel,
+  thinkingEnabled: boolean,
+): LanguageModel {
+  const baseModel = model as unknown as LanguageModel
+  if (!thinkingEnabled) return baseModel
+
+  return wrapLanguageModel({
+    model: baseModel as never,
+    middleware: extractReasoningMiddleware({
+      tagName: 'think',
+      startWithReasoning: true,
+    }),
+  })
 }
 
-const THINK_OPEN = '<' + 'think>'
-const THINK_CLOSE = '</' + 'think>'
-
-/** Remove leaked markup from thinking deltas shown in the UI. */
 function sanitizeThinkingDelta(text: string): string {
   return text
     .replace(new RegExp(THINK_OPEN, 'g'), '')
@@ -169,7 +132,6 @@ function sanitizeThinkingDelta(text: string): string {
     .replace(/<\|channel>thought\s*/gi, '')
 }
 
-/** Strip thinking blocks that leak into the answer channel. */
 function sanitizeAnswerDelta(text: string, thinkingEnabled = true): string {
   if (!thinkingEnabled) {
     return unwrapGemmaThinkingAsAnswer(text)
@@ -185,32 +147,15 @@ function sanitizeAnswerDelta(text: string, thinkingEnabled = true): string {
     .trimStart()
 }
 
-export async function* streamAiSdkToEvents(
-  model: TransformersJSLanguageModel | WebLLMLanguageModel,
+function createBrowserAiStream(
+  model: BrowserAiModel,
   provider: AiSdkProvider,
   req: AiSdkStreamRequest,
   abortSignal?: AbortSignal,
-): AsyncGenerator<LLMStreamEvent, void, unknown> {
-  if (provider === 'transformers-js' && isLfmOnnxModel(model.modelId)) {
-    yield* streamLfmTransformersToEvents(
-      model as TransformersJSLanguageModel,
-      req,
-      abortSignal,
-    )
-    return
-  }
-
+) {
   const thinkingEnabled = req.thinkingEnabled ?? false
   const toolsEnabled = req.toolsEnabled ?? false
-  const baseModel = model as unknown as LanguageModel
-  const languageModel = thinkingEnabled
-    ? wrapLanguageModel({
-        model: baseModel as never,
-        middleware: extractReasoningMiddleware(
-          getReasoningMiddlewareOptions(req.modelFamily),
-        ),
-      })
-    : baseModel
+  const languageModel = wrapModelWithReasoning(model, thinkingEnabled)
 
   const useProviderThinking =
     thinkingEnabled && !(toolsEnabled && provider === 'transformers-js')
@@ -221,19 +166,28 @@ export async function* streamAiSdkToEvents(
       : { 'web-llm': { extra_body: { enable_thinking: true } } }
     : undefined
 
-  const tools = toolsEnabled ? buildAiSdkToolSet() : undefined
-  const useTextToolParser = toolsEnabled && provider === 'transformers-js'
-  const textToolParser = useTextToolParser ? new ToolCallStreamParser() : null
-
-  const result = streamText({
+  return streamText({
     model: languageModel as never,
     messages: buildMessages(req),
-    ...(req.systemPrompt ? { instructions: req.systemPrompt } : {}),
+    ...(req.systemPrompt ? { system: req.systemPrompt } : {}),
     maxOutputTokens: req.maxTokens,
     abortSignal,
     providerOptions: providerOptions as never,
-    ...(tools ? { tools } : {}),
+    ...(toolsEnabled ? { tools: createTools() } : {}),
   })
+}
+
+async function* mapFullStreamToEvents(
+  result: StreamTextResult<ReturnType<typeof createTools>, never>,
+  options: {
+    thinkingEnabled: boolean
+    toolsEnabled: boolean
+    provider: AiSdkProvider
+  },
+): AsyncGenerator<LLMStreamEvent, void, unknown> {
+  const { thinkingEnabled, toolsEnabled, provider } = options
+  const useTextToolParser = toolsEnabled && provider === 'transformers-js'
+  const textToolParser = useTextToolParser ? new ToolCallStreamParser() : null
 
   for await (const part of result.fullStream) {
     if (part.type === 'text-delta' && part.text) {
@@ -291,4 +245,30 @@ export async function* streamAiSdkToEvents(
       yield { type: 'done' }
     }
   }
+}
+
+export async function* streamAiSdkToEvents(
+  model: BrowserAiModel,
+  provider: AiSdkProvider,
+  req: AiSdkStreamRequest,
+  abortSignal?: AbortSignal,
+): AsyncGenerator<LLMStreamEvent, void, unknown> {
+  if (provider === 'transformers-js' && isLfmOnnxModel(model.modelId)) {
+    yield* streamLfmTransformersToEvents(
+      model as TransformersJSLanguageModel,
+      req,
+      abortSignal,
+    )
+    return
+  }
+
+  const thinkingEnabled = req.thinkingEnabled ?? false
+  const toolsEnabled = req.toolsEnabled ?? false
+  const result = createBrowserAiStream(model, provider, req, abortSignal)
+
+  yield* mapFullStreamToEvents(result, {
+    thinkingEnabled,
+    toolsEnabled,
+    provider,
+  })
 }

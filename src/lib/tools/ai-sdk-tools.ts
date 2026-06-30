@@ -1,7 +1,8 @@
 import { jsonSchema, tool } from 'ai'
 import { buildToolDescriptionForSdk, getRegisteredTools } from './registry'
 
-export function buildAiSdkToolSet() {
+/** AI SDK tool set for @browser-ai/* providers (matches reference `createTools` pattern). */
+export function createTools() {
   const tools: Record<string, ReturnType<typeof tool>> = {}
 
   for (const definition of getRegisteredTools()) {
@@ -13,3 +14,6 @@ export function buildAiSdkToolSet() {
 
   return tools
 }
+
+/** @deprecated Use `createTools` instead. */
+export const buildAiSdkToolSet = createTools

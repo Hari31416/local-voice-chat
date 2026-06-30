@@ -7,6 +7,7 @@ import {
   Phone,
   PhoneOff,
   Send,
+  Square,
   Volume2,
   VolumeX,
   X,
@@ -55,6 +56,8 @@ interface ControlBarProps {
   onSubmitText: () => void
   onStartCall: () => void
   onEndCall: () => void
+  onStopGeneration: () => void
+  isGenerating: boolean
   onToggleMic: () => void
   onToggleMicMute: () => void
   onSwitchLLM: (modelId: string) => void
@@ -88,6 +91,8 @@ export function ControlBar({
   onSubmitText,
   onStartCall,
   onEndCall,
+  onStopGeneration,
+  isGenerating,
   onToggleMic,
   onToggleMicMute,
   onSwitchLLM,
@@ -205,6 +210,16 @@ export function ControlBar({
                       <Volume2 className="h-5 w-5" />
                     )}
                   </Button>
+                  {isGenerating && (
+                    <Button
+                      onClick={onStopGeneration}
+                      size="icon"
+                      className="h-10 w-10 rounded-full bg-amber-600 text-white hover:bg-amber-700 flex-shrink-0 shadow-lg shadow-amber-600/20"
+                      title="Stop generation"
+                    >
+                      <Square className="h-4 w-4 fill-current" />
+                    </Button>
+                  )}
                   <Button
                     onClick={onEndCall}
                     size="icon"
@@ -307,16 +322,29 @@ export function ControlBar({
                     className="flex-1 bg-transparent text-zinc-200 text-sm outline-none placeholder:text-zinc-500 disabled:text-zinc-500"
                   />
 
-                  <Button
-                    type="submit"
-                    size="icon"
-                    variant="ghost"
-                    disabled={!textInput.trim() || status !== 'ready'}
-                    className="h-7 w-7 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-full flex-shrink-0 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
-                    title="Send message"
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
+                  {isGenerating ? (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      onClick={onStopGeneration}
+                      className="h-7 w-7 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-full flex-shrink-0"
+                      title="Stop generation"
+                    >
+                      <Square className="h-4 w-4 fill-current" />
+                    </Button>
+                  ) : (
+                    <Button
+                      type="submit"
+                      size="icon"
+                      variant="ghost"
+                      disabled={!textInput.trim() || status !== 'ready'}
+                      className="h-7 w-7 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-full flex-shrink-0 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
+                      title="Send message"
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  )}
                 </form>
 
                 {setupPhase === "ready" && status !== "loading" && hasCallMode && (
