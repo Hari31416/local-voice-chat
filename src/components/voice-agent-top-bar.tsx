@@ -87,7 +87,7 @@ export function VoiceAgentTopBar({
       {showDebugPanel && (
         <div
           ref={debugPanelRef}
-          className="fixed top-4 right-4 bg-zinc-900 border border-zinc-700 rounded-lg p-4 text-xs font-mono z-50 min-w-[200px]"
+          className="fixed top-4 right-4 md:right-6 glass-panel rounded-xl p-4 text-xs font-mono z-50 min-w-[200px]"
         >
           <div className="flex justify-between items-center mb-2">
             <span className="text-zinc-400 font-semibold">Debug Info</span>
@@ -173,7 +173,7 @@ export function VoiceAgentTopBar({
                     type="checkbox"
                     checked={prefs.useThinking !== false}
                     onChange={(e) => onToggleThinking?.(e.target.checked)}
-                    className="rounded border-zinc-750 bg-zinc-900 text-violet-500 focus:ring-violet-500 focus:ring-offset-zinc-900 cursor-pointer h-3.5 w-3.5"
+                    className="rounded border-white/20 bg-white/[0.04] text-emerald-500 focus:ring-emerald-500/30 focus:ring-offset-0 cursor-pointer h-3.5 w-3.5"
                   />
                   <span>Use model thinking</span>
                 </label>
@@ -221,11 +221,11 @@ export function VoiceAgentTopBar({
         </div>
       )}
 
-      <div className="fixed top-4 right-4 flex gap-2 z-40">
+      <div className="fixed top-4 right-4 md:right-6 flex gap-2 z-40">
         {hasMessages && (
           <button
             onClick={onClearConversation}
-            className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-400 hover:text-white transition-colors"
+            className="p-2 glass-panel hover:bg-white/[0.06] rounded-xl text-zinc-400 hover:text-white transition-colors"
             title="Clear conversation"
           >
             <RotateCcw className="h-4 w-4" />
@@ -234,7 +234,7 @@ export function VoiceAgentTopBar({
         <button
           ref={debugToggleRef}
           onClick={() => setShowDebugPanel(!showDebugPanel)}
-          className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-400 hover:text-white transition-colors"
+          className="p-2 glass-panel hover:bg-white/[0.06] rounded-xl text-zinc-400 hover:text-white transition-colors"
           title="Toggle debug panel"
         >
           <Settings className="h-4 w-4" />

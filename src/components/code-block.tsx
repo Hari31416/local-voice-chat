@@ -22,7 +22,7 @@ function classifyToken(token: string): string {
     return 'text-pink-400 font-semibold'
   }
   if (/^(?:true|false|null|undefined|None|NaN)$/.test(token)) {
-    return 'text-violet-400 font-semibold'
+    return 'text-emerald-400 font-semibold'
   }
   if (/^[+\-*/%=!&|^~<>?]+$/.test(token)) {
     return 'text-sky-400'

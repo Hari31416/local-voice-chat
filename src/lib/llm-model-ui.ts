@@ -18,8 +18,8 @@ export const LLM_BACKEND_META: Record<
   qwen35: {
     label: "Qwen 3.5",
     description: "Vision · Transformers.js · WebGPU",
-    accent: "border-violet-500/40 bg-violet-500/10",
-    chip: "bg-violet-500/15 text-violet-300 border-violet-500/25",
+    accent: "border-rose-500/40 bg-rose-500/10",
+    chip: "bg-rose-500/15 text-rose-300 border-rose-500/25",
   },
   gemma4: {
     label: "Gemma 4",

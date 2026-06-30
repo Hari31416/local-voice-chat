@@ -134,9 +134,9 @@ export function ControlBar({
   if (setupPhase === "selecting") return null
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 p-4">
+    <div className="fixed bottom-0 left-0 right-0 p-4 md:pl-[88px] lg:pl-[236px]">
       <div className="max-w-4xl mx-auto">
-        <div className="bg-zinc-800/95 backdrop-blur-xl rounded-2xl border border-zinc-700/50 p-3 shadow-2xl">
+        <div className="glass-panel-strong rounded-2xl p-3 shadow-2xl shadow-black/40">
           {isCallActive ? (
             <div className="flex flex-col gap-3">
               <div className="text-zinc-400 text-xs px-2 text-center font-medium animate-pulse">
@@ -256,7 +256,7 @@ export function ControlBar({
                     e.preventDefault()
                     onSubmitText()
                   }}
-                  className="flex-1 flex items-center bg-zinc-900/50 border border-zinc-700/30 rounded-xl px-2.5 py-1.5 gap-2"
+                  className="flex-1 flex items-center bg-white/[0.04] border border-white/[0.08] rounded-xl px-2.5 py-1.5 gap-2"
                 >
                   {canAttachImage && (
                     <div className="flex-shrink-0">
@@ -295,8 +295,8 @@ export function ControlBar({
                     className={cn(
                       "h-7 w-7 rounded-full flex-shrink-0 text-[11px] font-bold",
                       hindiTypingEnabled
-                        ? "bg-violet-500/20 text-violet-300 hover:bg-violet-500/30"
-                        : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800",
+                        ? "bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25"
+                        : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]",
                     )}
                     title={
                       hindiTypingEnabled
@@ -374,8 +374,8 @@ export function ControlBar({
                       !isSecure
                         ? "bg-zinc-850 text-zinc-600 cursor-not-allowed opacity-50 shadow-none"
                         : isMicActive
-                          ? "bg-red-600 text-white hover:bg-red-700 shadow-red-600/20"
-                          : "bg-violet-600 text-white hover:bg-violet-500 shadow-violet-600/20",
+                          ? "bg-red-500 text-white hover:bg-red-400 shadow-red-500/20"
+                          : "bg-emerald-500 text-emerald-950 hover:bg-emerald-400 shadow-emerald-500/20",
                     )}
                     title={
                       !isSecure

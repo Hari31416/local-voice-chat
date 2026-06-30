@@ -119,7 +119,7 @@ function ModelBadges({
           className={cn(
             "inline-flex items-center gap-0.5 rounded border font-semibold",
             compact ? "px-1 py-0 text-[8px]" : "px-1.5 py-0.5 text-[9px]",
-            "bg-violet-500/15 text-violet-300 border-violet-500/30",
+            "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
           )}
         >
           {!compact && <Sparkles className="h-2.5 w-2.5" />}
@@ -195,8 +195,8 @@ function ModelCard({
       className={cn(
         "group w-full text-left rounded-xl border transition-all duration-150 cursor-pointer p-3",
         isSelected
-          ? cn("ring-1 ring-violet-400/40 shadow-lg shadow-violet-950/20 bg-zinc-900/90", backend.accent)
-          : "bg-zinc-900/50 border-zinc-800 hover:border-zinc-600 hover:bg-zinc-900/80",
+          ? cn("ring-1 ring-emerald-500/30 shadow-lg shadow-emerald-950/20 bg-white/[0.04]", backend.accent)
+          : "bg-white/[0.02] border-white/[0.06] hover:border-white/[0.12] hover:bg-white/[0.04]",
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -205,7 +205,7 @@ function ModelCard({
             <span className={cn("font-semibold text-white truncate text-sm")}>
               {model.name}
             </span>
-            {isSelected && <Check className="h-3.5 w-3.5 text-violet-300 flex-shrink-0" />}
+            {isSelected && <Check className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0" />}
           </div>
           <ModelBadges model={model} isMobile={isMobile} compact={compact} />
         </div>
@@ -286,7 +286,7 @@ function SetupSelector({
 
   return (
     <div className="flex flex-col min-h-0 flex-1 space-y-3">
-      <div className={cn("rounded-xl border bg-gradient-to-br from-zinc-900/60 to-zinc-900/40 p-3", backendMeta.accent)}>
+      <div className={cn("rounded-xl border bg-white/[0.02] p-3", backendMeta.accent)}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-wider font-semibold text-zinc-400 mb-1">
@@ -317,8 +317,8 @@ function SetupSelector({
               className={cn(
                 "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors cursor-pointer",
                 active
-                  ? "bg-zinc-100 text-zinc-900 border-zinc-200"
-                  : "bg-zinc-900/60 text-zinc-400 border-zinc-800 hover:border-zinc-600 hover:text-zinc-200",
+                  ? "bg-emerald-500 text-emerald-950 border-emerald-500"
+                  : "bg-white/[0.03] text-zinc-400 border-white/[0.08] hover:border-white/[0.14] hover:text-zinc-200",
               )}
             >
               {f.label}
@@ -382,7 +382,7 @@ function MenuSelector({
   const groups = groupLLMModels(LLM_MODELS)
 
   return (
-    <div className="absolute bottom-full mb-2 left-0 w-[min(100vw-2rem,320px)] bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/80 rounded-xl shadow-2xl z-20 overflow-hidden">
+    <div className="absolute bottom-full mb-2 left-0 w-[min(100vw-2rem,320px)] glass-panel-strong rounded-xl shadow-2xl z-20 overflow-hidden">
       <div className="px-3 py-2 border-b border-zinc-800/80">
         <p className="text-[10px] uppercase tracking-wider font-semibold text-zinc-400">Switch model</p>
         <p className="text-[11px] text-zinc-500">Reloads the selected LLM</p>
@@ -407,13 +407,13 @@ function MenuSelector({
                     className={cn(
                       "w-full text-left rounded-lg px-2.5 py-2 transition-colors cursor-pointer",
                       selectedId === v.id
-                        ? "bg-violet-500/15 border border-violet-500/30"
-                        : "hover:bg-zinc-800/80 border border-transparent",
+                        ? "bg-emerald-500/10 border border-emerald-500/30"
+                        : "hover:bg-white/[0.04] border border-transparent",
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
-                        {selectedId === v.id && <Check className="h-3.5 w-3.5 text-violet-300 flex-shrink-0" />}
+                        {selectedId === v.id && <Check className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0" />}
                         <span className="text-xs font-medium text-white truncate">{model.name}</span>
                       </div>
                       <span className="text-[10px] text-zinc-500 flex-shrink-0">{v.sizeLabel}</span>

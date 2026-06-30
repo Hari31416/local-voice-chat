@@ -24,16 +24,16 @@ function ThinkingBlock({ thinking, isGenerating }: ThinkingBlockProps) {
   const [isExpanded, setIsExpanded] = useState(true)
 
   return (
-    <div className="w-full border border-zinc-900 bg-zinc-950/40 rounded-lg overflow-hidden mb-2 text-xs select-none">
+    <div className="w-full border border-white/[0.06] bg-white/[0.02] rounded-xl overflow-hidden mb-2 text-xs select-none">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between px-3 py-2 text-zinc-400 hover:text-zinc-200 transition-colors bg-zinc-900/20 cursor-pointer"
+        className="w-full flex items-center justify-between px-3 py-2.5 text-zinc-400 hover:text-zinc-200 transition-colors bg-white/[0.02] cursor-pointer"
       >
         <div className="flex items-center gap-1.5 font-medium">
-          <Brain className={cn("h-3.5 w-3.5 text-purple-400", isGenerating && "animate-pulse")} />
+          <Brain className={cn("h-3.5 w-3.5 text-teal-400", isGenerating && "animate-pulse")} />
           <span>Thinking Process</span>
           {isGenerating && (
-            <span className="h-1.5 w-1.5 rounded-full bg-purple-500 animate-ping ml-1" />
+            <span className="h-1.5 w-1.5 rounded-full bg-teal-400 animate-ping ml-1" />
           )}
         </div>
         {isExpanded ? (
@@ -122,10 +122,10 @@ export function ConversationArea({
               />
             ) : (
               <>
-                <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight">
+                <h1 className="font-display text-3xl font-extrabold text-white mb-2 tracking-tight">
                   WebVoice
                 </h1>
-                <p className="text-zinc-500">
+                <p className="text-zinc-500 text-sm">
                   {setupPhase === 'loading'
                     ? statusMessage
                     : isCallActive
@@ -138,10 +138,10 @@ export function ConversationArea({
                 </p>
                 {setupPhase === "loading" && activeLoadProgress && (
                   <div className="mt-4 w-64 mx-auto">
-                    <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                    <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
                       {activeLoadProgress.progress > 0 ? (
                         <div
-                          className={`h-full ${activeLoadProgress.color} transition-all duration-300`}
+                          className={`h-full ${activeLoadProgress.color} transition-all duration-300 rounded-full`}
                           style={{ width: `${activeLoadProgress.progress}%` }}
                         />
                       ) : (

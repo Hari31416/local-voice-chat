@@ -79,8 +79,8 @@ export function WarningBanners({
       )}
 
       {showMemoryWarning && (
-        <div className="flex items-start gap-3 bg-zinc-900/80 border border-zinc-700/50 rounded-xl p-3.5 shadow-md backdrop-blur-sm">
-          <Info className="h-5 w-5 text-purple-400 flex-shrink-0 mt-0.5" />
+        <div className="flex items-start gap-3 bg-white/[0.03] border border-white/[0.08] rounded-xl p-3.5 shadow-md backdrop-blur-sm">
+          <Info className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <h4 className="font-semibold text-zinc-200 text-xs">Mobile Device Memory Warning</h4>
             <p className="text-[11px] text-zinc-400 leading-normal mt-0.5">

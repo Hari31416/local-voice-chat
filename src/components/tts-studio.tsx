@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react"
-import { Play, Square, Sparkles, AudioLines, Settings } from "lucide-react"
+import { Play, Square, Sparkles, AudioLines, Settings2, Type } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { useTTS } from "@/hooks/use-tts"
 import { PIPER_VOICES, SUPERTRONIC_VOICES, TTS_ENGINE_OPTIONS } from "@/lib/tts-voices"
 import { pcmToWav } from "@/lib/piper/wav"
 import { cn } from "@/lib/utils"
 import { AudioWaveformPlayer } from "@/components/audio-waveform-player"
+import { StudioPageHeader, studioPageClass } from "@/components/studio-page-header"
 
 interface TTSStudioProps {
   tts: ReturnType<typeof useTTS>
@@ -19,7 +20,6 @@ export function TTSStudio({ tts }: TTSStudioProps) {
 
   const voices = engine === "supertonic" ? SUPERTRONIC_VOICES : PIPER_VOICES
 
-  // Sync state with shared tts when changed from outside
   useEffect(() => {
     if (tts.engine !== engine) {
       setEngine(tts.engine)
@@ -45,17 +45,15 @@ export function TTSStudio({ tts }: TTSStudioProps) {
         URL.revokeObjectURL(wavUrl)
         setWavUrl(null)
       }
-      
-      // Load current chosen engine & voice
+
       await tts.loadModels({ engine, voice })
-      
+
       const result = await tts.synthesize(text)
-      
-      // Encode PCM float32 to WAV
+
       const wavBytes = pcmToWav(result.audio, result.sampling_rate)
       const blob = new Blob([wavBytes], { type: "audio/wav" })
       const url = URL.createObjectURL(blob)
-      
+
       setWavUrl(url)
     } catch (err) {
       console.error("Synthesis failed:", err)
@@ -63,38 +61,40 @@ export function TTSStudio({ tts }: TTSStudioProps) {
   }
 
   return (
-    <div className="max-w-3xl mx-auto w-full px-4 py-8 space-y-6">
-      <div className="text-center space-y-2">
-        <h1 className="text-4xl font-extrabold text-white tracking-tight">
-          TTS Studio
-        </h1>
-        <p className="text-zinc-400 text-sm max-w-lg mx-auto">
-          Generate natural speech completely in your browser, offline. No API keys required.
-        </p>
-      </div>
+    <div className={studioPageClass}>
+      <StudioPageHeader
+        eyebrow="Text-to-Speech"
+        title="TTS Studio"
+        description="Generate natural speech in your browser. Offline, private, no API keys."
+        accent="cyan"
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Settings panel */}
-        <div className="md:col-span-1 bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 space-y-5 backdrop-blur-xl">
-          <div className="flex items-center gap-2 text-zinc-300 font-semibold border-b border-zinc-800/80 pb-2">
-            <Settings className="h-4.5 w-4.5 text-blue-400" />
-            <span>Voice Configuration</span>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-5">
+        {/* Config panel */}
+        <div className="lg:col-span-2 glass-panel rounded-2xl p-4 sm:p-5 space-y-4 sm:space-y-5">
+          <div className="flex items-center gap-2.5 pb-3 border-b border-white/[0.06]">
+            <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400">
+              <Settings2 className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="font-semibold text-white text-sm">Voice configuration</p>
+              <p className="text-[11px] text-zinc-600">Engine & speaker model</p>
+            </div>
           </div>
 
-          {/* Engine Select */}
           <div className="space-y-2">
-            <label className="text-xs text-zinc-400 uppercase tracking-wider font-semibold">Engine</label>
+            <label className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Engine</label>
             <div className="grid grid-cols-2 gap-2">
               {TTS_ENGINE_OPTIONS.map((opt) => (
                 <button
                   key={opt.id}
                   type="button"
-                  onClick={() => handleEngineChange(opt.id as any)}
+                  onClick={() => handleEngineChange(opt.id as typeof tts.engine)}
                   className={cn(
-                    "p-2 rounded-xl border text-xs font-semibold transition-all duration-200 text-center cursor-pointer",
+                    "p-2.5 rounded-xl border text-xs font-semibold transition-all duration-150 text-center cursor-pointer",
                     engine === opt.id
-                      ? "bg-blue-950/30 border-blue-500/60 text-blue-300 ring-1 ring-blue-500/20"
-                      : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-850 hover:text-zinc-200"
+                      ? "border-cyan-500/40 bg-cyan-500/8 text-cyan-300"
+                      : "border-white/[0.06] bg-white/[0.02] text-zinc-500 hover:border-white/[0.12] hover:text-zinc-300",
                   )}
                 >
                   {opt.name}
@@ -103,130 +103,127 @@ export function TTSStudio({ tts }: TTSStudioProps) {
             </div>
           </div>
 
-          {/* Voice Select */}
           <div className="space-y-2">
-            <label className="text-xs text-zinc-400 uppercase tracking-wider font-semibold">Voice Model</label>
-            <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
+            <label className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Voice model</label>
+            <div className="space-y-1.5 max-h-[240px] overflow-y-auto pr-1">
               {voices.map((v) => (
                 <button
                   key={v.id}
                   type="button"
                   onClick={() => setVoice(v.id)}
                   className={cn(
-                    "w-full p-2.5 rounded-xl border text-left transition-all duration-200 flex flex-col gap-0.5 cursor-pointer",
+                    "w-full p-3 rounded-xl border text-left transition-all duration-150 flex flex-col gap-0.5 cursor-pointer",
                     voice === v.id
-                      ? "bg-blue-950/20 border-blue-500/50 text-blue-200"
-                      : "bg-zinc-900/40 border-zinc-800/60 text-zinc-400 hover:border-zinc-700 hover:bg-zinc-900"
+                      ? "border-cyan-500/40 bg-cyan-500/8"
+                      : "border-white/[0.06] bg-white/[0.02] hover:border-white/[0.1] hover:bg-white/[0.04]",
                   )}
                 >
-                  <span className="text-xs font-bold text-white">{v.name}</span>
+                  <span className="text-xs font-semibold text-white">{v.name}</span>
                   <span className="text-[10px] text-zinc-500 line-clamp-1">{v.desc}</span>
                   {"sizeLabel" in v && (
-                    <span className="text-[9px] font-bold text-blue-400/80 mt-0.5">{(v as any).sizeLabel}</span>
+                    <span className="text-[9px] font-mono font-bold text-cyan-500/70 mt-0.5">{(v as { sizeLabel: string }).sizeLabel}</span>
                   )}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Model Load Action */}
-          <div className="pt-2">
+          <div className="pt-1">
             {tts.isReady && tts.engine === engine && tts.voice === voice ? (
-              <div className="text-center text-[11px] font-semibold bg-green-500/10 border border-green-500/20 text-green-400 py-2 rounded-xl">
-                Model Ready In Memory
+              <div className="text-center text-[11px] font-semibold bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 py-2.5 rounded-xl">
+                Model ready in memory
               </div>
             ) : (
               <Button
                 onClick={handleLoadModel}
                 disabled={tts.isLoading}
                 variant="ghost"
-                className="w-full bg-zinc-950/40 border border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs py-5 font-semibold cursor-pointer"
+                className="w-full border border-white/[0.08] bg-white/[0.03] text-zinc-300 hover:bg-white/[0.06] hover:text-white text-xs py-5 font-semibold cursor-pointer rounded-xl"
               >
-                {tts.isLoading ? "Loading..." : "Pre-load Model"}
+                {tts.isLoading ? "Loading..." : "Pre-load model"}
               </Button>
             )}
           </div>
         </div>
 
-        {/* Text Area and Synthesize Sandbox */}
-        <div className="md:col-span-2 space-y-4">
-          <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 space-y-4 backdrop-blur-xl flex flex-col">
-            <div className="flex items-center justify-between text-zinc-300 border-b border-zinc-800/80 pb-2">
-              <div className="flex items-center gap-2 font-semibold">
-                <Sparkles className="h-4.5 w-4.5 text-cyan-400" />
-                <span>Text input</span>
+        {/* Input + synthesize */}
+        <div className="lg:col-span-3 space-y-4">
+          <div className="glass-panel rounded-2xl p-5 space-y-4 flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-white/[0.04] text-zinc-400">
+                  <Type className="h-4 w-4" />
+                </div>
+                <span className="font-semibold text-white text-sm">Text input</span>
               </div>
-              <span className="text-[10px] font-mono text-zinc-500">{text.length} chars</span>
+              <span className="text-[10px] font-mono text-zinc-600 bg-white/[0.04] px-2 py-1 rounded-md">{text.length} chars</span>
             </div>
 
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder="Type your text to synthesize..."
-              rows={6}
+              rows={7}
               disabled={tts.isSynthesizing}
-              className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl p-3.5 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none resize-none focus:border-blue-500/50 transition-colors"
+              className="studio-input w-full p-4 text-sm resize-none min-h-[160px]"
             />
 
-            {/* Progress indicators */}
             {(tts.isLoading || tts.isSynthesizing) && (
-              <div className="bg-zinc-950/40 border border-zinc-800/80 rounded-xl p-3.5 space-y-2">
-                <div className="flex justify-between text-xs font-semibold">
-                  <span className="text-zinc-400">
-                    {tts.isLoading ? "Downloading model weights..." : "Synthesizing voice PCM..."}
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 space-y-2.5">
+                <div className="flex justify-between text-xs font-medium">
+                  <span className="text-zinc-500">
+                    {tts.isLoading ? "Downloading model weights..." : "Synthesizing voice..."}
                   </span>
-                  <span className="text-blue-400 font-mono">
+                  <span className="text-cyan-400 font-mono">
                     {tts.isLoading ? `${tts.loadProgress}%` : `${tts.synthesisProgress}%`}
                   </span>
                 </div>
-                <div className="h-2 bg-zinc-900 rounded-full overflow-hidden">
+                <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-blue-500 transition-all duration-300"
+                    className="h-full bg-cyan-500 transition-all duration-300 rounded-full"
                     style={{ width: `${tts.isLoading ? tts.loadProgress : tts.synthesisProgress}%` }}
                   />
                 </div>
               </div>
             )}
 
-            <div className="flex gap-2 pt-2">
+            <div className="flex gap-2 pt-1">
               <Button
                 onClick={handleSynthesize}
                 disabled={tts.isSynthesizing || tts.isLoading || !text.trim()}
-                className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-5 rounded-xl shadow border border-blue-700 flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                className="flex-1 bg-cyan-500 hover:bg-cyan-400 text-cyan-950 font-bold py-5 rounded-xl shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
               >
                 {tts.isSynthesizing ? (
                   <>
-                    <AudioLines className="h-4.5 w-4.5 animate-pulse" />
+                    <AudioLines className="h-4 w-4 animate-pulse" />
                     <span>Synthesizing...</span>
                   </>
                 ) : (
                   <>
-                    <Play className="h-4.5 w-4.5" />
+                    <Play className="h-4 w-4" />
                     <span>Synthesize & Play</span>
                   </>
                 )}
               </Button>
-              
+
               {tts.isSynthesizing && (
                 <Button
                   onClick={tts.stop}
                   variant="destructive"
-                  className="bg-red-650 hover:bg-red-750 text-white font-semibold py-5 rounded-xl flex-shrink-0 cursor-pointer"
+                  className="bg-red-600 hover:bg-red-500 text-white font-semibold py-5 rounded-xl flex-shrink-0 cursor-pointer px-4"
                 >
-                  <Square className="h-4.5 w-4.5" />
+                  <Square className="h-4 w-4" />
                 </Button>
               )}
             </div>
           </div>
 
-          {/* Results/Playback panel */}
           {wavUrl && (
-            <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 space-y-4 backdrop-blur-xl animate-fade-in">
-              <div className="text-zinc-300 font-semibold border-b border-zinc-800/80 pb-2 text-sm flex items-center gap-2">
-                <AudioLines className="h-4.5 w-4.5 text-teal-400" />
-                <span>Generated Audio Player</span>
+            <div className="glass-panel rounded-2xl p-5 space-y-4 animate-fade-up">
+              <div className="flex items-center gap-2.5 pb-3 border-b border-white/[0.06]">
+                <Sparkles className="h-4 w-4 text-cyan-400" />
+                <span className="font-semibold text-white text-sm">Generated audio</span>
               </div>
-              
               <AudioWaveformPlayer src={wavUrl} variant="studio" />
             </div>
           )}

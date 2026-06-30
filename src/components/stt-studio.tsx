@@ -1,11 +1,10 @@
 import { useState, useRef, useEffect } from "react"
-import { Mic, Upload, Copy, Check, FileAudio, AudioLines, RefreshCw, Square } from "lucide-react"
+import { Mic, Upload, Copy, Check, FileAudio, AudioLines, RefreshCw, Square, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { StudioPageHeader, studioPageClass } from "@/components/studio-page-header"
 import { cn } from "@/lib/utils"
 import { STT_OPTIONS } from "@/lib/stt-models"
 import type { STTModelOption } from "@/lib/stt-models"
-
-// ── STT grouping helpers (mirrors setup-screen.tsx) ─────────────────────────────
 
 const STT_ENGINE_GROUP_LABELS: Record<string, string> = {
   whisper: 'Whisper',
@@ -91,9 +90,8 @@ export function STTStudio({
     await loadSTTOnly(selectedModelId)
   }
 
-  // Resample helper
   const resampleAudio = async (blob: Blob): Promise<Float32Array> => {
-    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const audioCtx = new (window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
     const arrayBuffer = await blob.arrayBuffer()
     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer)
 
@@ -224,87 +222,51 @@ export function STTStudio({
   }
 
   return (
-    <div className="max-w-3xl mx-auto w-full px-4 py-8 space-y-6">
-      <div className="text-center space-y-2">
-        <h1 className="text-4xl font-extrabold text-white tracking-tight">
-          STT Studio
-        </h1>
-        <p className="text-zinc-400 text-sm max-w-lg mx-auto">
-          Transcribe voice messages or audio files completely in your browser, keeping your data private.
-        </p>
-      </div>
+    <div className={studioPageClass}>
+      <StudioPageHeader
+        eyebrow="Speech-to-Text"
+        title="STT Studio"
+        description="Transcribe voice or audio files on-device. Your data never leaves the browser."
+        accent="amber"
+      />
 
       {!isSttLoaded ? (
-        <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-8 text-center space-y-4 backdrop-blur-xl">
-          <AudioLines className="h-12 w-12 text-zinc-600 mx-auto animate-pulse" />
-          <h2 className="text-lg font-bold text-white">Speech Recognition Model Required ({selectedStt.name})</h2>
-          <p className="text-zinc-400 text-xs max-w-sm mx-auto">
-            This module requires downloading a local speech recognition model ({selectedStt.sizeLabel}) and VAD systems to run on-device.
-          </p>
+        <div className="glass-panel rounded-2xl p-6 sm:p-10 text-center space-y-5 max-w-lg mx-auto">
+          <div className="h-16 w-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto">
+            <AudioLines className="h-8 w-8 text-amber-400 animate-pulse" />
+          </div>
+          <div>
+            <h2 className="font-display text-lg font-bold text-white mb-1">Load speech model</h2>
+            <p className="text-zinc-500 text-xs leading-relaxed">
+              Download {selectedStt.name} ({selectedStt.sizeLabel}) to transcribe on-device.
+            </p>
+          </div>
           {loadingModel || (sttLoadProgress > 0 && sttLoadProgress < 100) ? (
-            <div className="max-w-xs mx-auto space-y-2">
-              <div className="flex justify-between text-xs text-zinc-400 font-semibold">
+            <div className="space-y-2.5">
+              <div className="flex justify-between text-xs text-zinc-500 font-medium">
                 <span>{statusMessage || "Starting download..."}</span>
-                <span className="text-emerald-400">{sttLoadProgress}%</span>
+                <span className="text-amber-400 font-mono">{sttLoadProgress}%</span>
               </div>
-              <div className="h-2 bg-zinc-950 rounded-full overflow-hidden">
+              <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-emerald-500 transition-all duration-350"
+                  className="h-full bg-amber-500 transition-all duration-350 rounded-full"
                   style={{ width: `${sttLoadProgress}%` }}
                 />
               </div>
             </div>
           ) : (
-              <div className="max-w-xs mx-auto space-y-4">
-                <div className="space-y-1.5 text-left">
-                  <label className="text-zinc-400 text-[10px] uppercase tracking-wider font-semibold">Select Speech Model</label>
-                  <select
-                    value={selectedModelId}
-                    onChange={(e) => setSelectedModelId(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none cursor-pointer hover:border-zinc-700 focus:border-zinc-600 transition-colors"
-                  >
-                    {groupSTTOptions(STT_OPTIONS).map(({ label, opts }) => (
-                      <optgroup key={label} label={label} className="bg-zinc-950">
-                        {opts.map((opt) => (
-                          <option key={opt.id} value={opt.id} className="bg-zinc-950 text-white">
-                            {sttOptionLabel(opt)}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                </div>
-                <Button
-                  onClick={handleLoadSTT}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-5 rounded-xl text-xs cursor-pointer"
-                >
-                  Load Speech Recognition Model
-                </Button>
-              </div>
-          )}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Controls Panel */}
-            <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 space-y-5 backdrop-blur-xl">
-              {/* Active Speech Model Dropdown */}
+            <div className="space-y-4 text-left">
               <div className="space-y-1.5">
-                <label className="text-zinc-400 text-[10px] uppercase tracking-wider font-semibold">Active Speech Model</label>
+                <label className="text-zinc-500 text-[10px] uppercase tracking-wider font-semibold">Select model</label>
                 <select
                   value={selectedModelId}
-                  disabled={sttTranscribing}
-                  onChange={async (e) => {
-                    const val = e.target.value
-                    setSelectedModelId(val)
-                    setLoadingModel(true)
-                    await loadSTTOnly(val)
-                  }}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none cursor-pointer hover:border-zinc-700 focus:border-zinc-600 transition-colors disabled:opacity-50"
+                  onChange={(e) => setSelectedModelId(e.target.value)}
+                  className="studio-input w-full px-3 py-2 text-xs cursor-pointer"
                 >
                   {groupSTTOptions(STT_OPTIONS).map(({ label, opts }) => (
-                    <optgroup key={label} label={label} className="bg-zinc-950">
+                    <optgroup key={label} label={label}>
                       {opts.map((opt) => (
-                        <option key={opt.id} value={opt.id} className="bg-zinc-950 text-white">
+                        <option key={opt.id} value={opt.id}>
                           {sttOptionLabel(opt)}
                         </option>
                       ))}
@@ -312,52 +274,89 @@ export function STTStudio({
                   ))}
                 </select>
               </div>
+              <Button
+                onClick={handleLoadSTT}
+                className="w-full bg-amber-500 hover:bg-amber-400 text-amber-950 font-bold px-6 py-5 rounded-xl text-sm cursor-pointer shadow-lg shadow-amber-500/20"
+              >
+                Load speech recognition model
+              </Button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+          {/* Input panel */}
+          <div className="glass-panel rounded-2xl p-4 sm:p-5 space-y-4 sm:space-y-5">
+            <div className="space-y-1.5">
+              <label className="text-zinc-500 text-[10px] uppercase tracking-wider font-semibold">Active model</label>
+              <select
+                value={selectedModelId}
+                disabled={sttTranscribing}
+                onChange={async (e) => {
+                  const val = e.target.value
+                  setSelectedModelId(val)
+                  setLoadingModel(true)
+                  await loadSTTOnly(val)
+                }}
+                className="studio-input w-full px-3 py-2 text-xs cursor-pointer disabled:opacity-50"
+              >
+                {groupSTTOptions(STT_OPTIONS).map(({ label, opts }) => (
+                  <optgroup key={label} label={label}>
+                    {opts.map((opt) => (
+                      <option key={opt.id} value={opt.id}>
+                        {sttOptionLabel(opt)}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
 
-            {/* Record Box */}
-            <div className="flex flex-col items-center justify-center p-6 bg-zinc-950/40 border border-zinc-850 rounded-xl space-y-4">
-              <span className="text-xs text-zinc-400 uppercase tracking-wider font-semibold">Voice Input</span>
+            {/* Mic */}
+            <div className="flex flex-col items-center justify-center p-8 bg-white/[0.02] border border-white/[0.06] rounded-xl space-y-4">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Voice input</span>
 
               <div className="relative">
                 {recording && (
-                  <div className="absolute inset-0 bg-red-500/20 rounded-full animate-ping" />
+                  <div className="absolute inset-0 bg-red-500/15 rounded-full animate-ping" />
                 )}
                 <button
                   type="button"
-                    onClick={startRecording}
-                    disabled={recording || sttTranscribing}
+                  onClick={recording ? stopRecording : startRecording}
+                  disabled={sttTranscribing && !recording}
                   className={cn(
-                    "h-20 w-20 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl",
+                    "relative h-20 w-20 rounded-full flex items-center justify-center transition-all duration-300",
                     recording
-                      ? "bg-red-600/60 text-red-300 cursor-not-allowed"
-                      : "bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 disabled:opacity-50"
+                      ? "bg-red-500/20 border-2 border-red-500/50 text-red-400"
+                      : "bg-white/[0.04] border-2 border-white/[0.08] text-zinc-400 hover:text-white hover:border-amber-500/30 hover:bg-amber-500/5 disabled:opacity-50",
                   )}
                 >
-                    <Mic className="h-8 w-8" />
+                  {recording ? <Square className="h-7 w-7 fill-current" /> : <Mic className="h-8 w-8" />}
                 </button>
               </div>
 
               {recording ? (
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-block h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-                      <span className="text-xs text-red-400 font-bold tracking-wide">Recording...</span>
-                    </div>
-                  <span className="text-sm font-mono text-zinc-300">{formatTime(recordingTime)}</span>
-                    <button
-                      type="button"
-                      onClick={stopRecording}
-                      className="flex items-center gap-2 px-5 py-2 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white text-xs font-bold rounded-full transition-all duration-200 shadow-lg shadow-red-900/40 border border-red-500/50"
-                    >
-                      <Square className="h-3.5 w-3.5 fill-white" />
-                      Stop Recording
-                    </button>
+                <div className="flex flex-col items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                    <span className="text-xs text-red-400 font-semibold">Recording</span>
+                  </div>
+                  <span className="text-lg font-mono text-zinc-300 tabular-nums">{formatTime(recordingTime)}</span>
+                  <button
+                    type="button"
+                    onClick={stopRecording}
+                    className="flex items-center gap-2 px-5 py-2 bg-red-500/15 hover:bg-red-500/25 text-red-300 text-xs font-semibold rounded-full transition-all border border-red-500/30"
+                  >
+                    <Square className="h-3 w-3 fill-current" />
+                    Stop
+                  </button>
                 </div>
               ) : (
-                <span className="text-xs text-zinc-500">Tap mic to speak</span>
+                <span className="text-xs text-zinc-600">Tap to speak</span>
               )}
             </div>
 
-            {/* File Upload Box */}
+            {/* File upload */}
             <div
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -365,14 +364,14 @@ export function STTStudio({
               className={cn(
                 "border-2 border-dashed rounded-xl p-6 text-center transition-all flex flex-col items-center justify-center space-y-2.5",
                 isDragging
-                  ? "bg-emerald-950/15 border-emerald-500 text-emerald-400"
-                  : "bg-zinc-950/20 border-zinc-800 hover:border-zinc-700 text-zinc-500"
+                  ? "bg-amber-500/8 border-amber-500/40 text-amber-300"
+                  : "border-white/[0.08] bg-white/[0.02] hover:border-white/[0.14] text-zinc-500",
               )}
             >
-              <Upload className="h-7 w-7 text-zinc-500" />
-              <div className="space-y-1">
-                <p className="text-xs text-zinc-300 font-semibold">Drag & drop audio files here</p>
-                <p className="text-[10px] text-zinc-500">Supports WAV, MP3, M4A, etc.</p>
+              <Upload className="h-6 w-6" />
+              <div className="space-y-0.5">
+                <p className="text-xs text-zinc-300 font-medium">Drop audio files here</p>
+                <p className="text-[10px] text-zinc-600">WAV, MP3, M4A, and more</p>
               </div>
 
               <label className="cursor-pointer">
@@ -383,61 +382,65 @@ export function STTStudio({
                   disabled={sttTranscribing}
                   className="hidden"
                 />
-                <span className="inline-block mt-1 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-[11px] font-semibold rounded-lg border border-zinc-700/50 transition-all">
-                  Browse Files
+                <span className="inline-block mt-1 px-4 py-2 bg-white/[0.06] hover:bg-white/[0.1] text-zinc-300 hover:text-white text-[11px] font-semibold rounded-lg border border-white/[0.08] transition-all">
+                  Browse files
                 </span>
               </label>
             </div>
           </div>
 
-          {/* Transcript Panel */}
-          <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 flex flex-col justify-between backdrop-blur-xl min-h-[350px]">
-            <div className="space-y-4 flex-1 flex flex-col">
-              <div className="flex items-center justify-between text-zinc-300 border-b border-zinc-800/80 pb-2 text-sm">
-                <span className="font-semibold">Transcription Result</span>
-                {audioFileName && (
-                  <span className="text-[10px] font-mono text-zinc-500 line-clamp-1 max-w-[150px]" title={audioFileName}>
-                    {audioFileName}
-                  </span>
-                )}
+          {/* Transcript panel */}
+          <div className="glass-panel rounded-2xl p-5 flex flex-col min-h-[400px]">
+            <div className="flex items-center justify-between pb-3 border-b border-white/[0.06] mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400">
+                  <FileText className="h-4 w-4" />
+                </div>
+                <span className="font-semibold text-white text-sm">Transcription</span>
               </div>
+              {audioFileName && (
+                <span className="text-[10px] font-mono text-zinc-600 line-clamp-1 max-w-[140px]" title={audioFileName}>
+                  {audioFileName}
+                </span>
+              )}
+            </div>
 
+            <div className="flex-1 flex flex-col">
               {sttTranscribing ? (
                 <div className="flex-1 flex flex-col items-center justify-center space-y-3">
-                  <RefreshCw className="h-8 w-8 text-emerald-400 animate-spin" />
-                  <p className="text-xs text-zinc-400 font-semibold">{statusMessage}</p>
+                  <RefreshCw className="h-8 w-8 text-amber-400 animate-spin" />
+                  <p className="text-xs text-zinc-500 font-medium">{statusMessage}</p>
                 </div>
               ) : sttTranscriptResult !== null ? (
                 sttTranscriptResult.startsWith('[Error:') ? (
-                  <div className="flex-1 bg-red-950/30 border border-red-800/50 rounded-xl p-3.5 text-sm text-red-300 overflow-y-auto leading-relaxed min-h-[180px] flex flex-col gap-2">
-                    <span className="text-xs font-bold text-red-400 uppercase tracking-wider">Transcription Failed</span>
+                  <div className="flex-1 bg-red-500/8 border border-red-500/20 rounded-xl p-4 text-sm text-red-300 overflow-y-auto leading-relaxed min-h-[200px] flex flex-col gap-2">
+                    <span className="text-xs font-bold text-red-400 uppercase tracking-wider">Failed</span>
                     <p className="text-xs text-red-300/80">{sttTranscriptResult.replace('[Error: ', '').replace(']', '')}</p>
-                    <p className="text-[10px] text-red-500/60 mt-auto">Check the browser console for more details.</p>
                   </div>
                 ) : sttTranscriptResult.trim() === '' ? (
                   <div className="flex-1 flex flex-col items-center justify-center text-center p-6 gap-2">
-                    <FileAudio className="h-8 w-8 text-amber-700/60 mb-1" />
+                    <FileAudio className="h-8 w-8 text-amber-700/40 mb-1" />
                     <p className="text-xs text-amber-500/80 font-semibold">No speech detected</p>
-                    <p className="text-[10px] text-zinc-500">Try speaking louder or closer to the microphone, or record a longer clip.</p>
+                    <p className="text-[10px] text-zinc-600">Try speaking louder or recording a longer clip.</p>
                   </div>
                 ) : (
-                  <div className="flex-1 bg-zinc-950/60 border border-zinc-850 rounded-xl p-3.5 text-sm text-zinc-100 overflow-y-auto leading-relaxed select-text min-h-[180px]">
+                  <div className="flex-1 bg-white/[0.02] border border-white/[0.06] rounded-xl p-4 text-sm text-zinc-200 overflow-y-auto leading-relaxed select-text min-h-[200px]">
                     {sttTranscriptResult}
                   </div>
                 )
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
-                  <FileAudio className="h-8 w-8 text-zinc-700 mb-2" />
-                  <p className="text-xs text-zinc-500 font-medium">Record voice or upload an audio file to view transcription.</p>
+                  <FileAudio className="h-10 w-10 text-zinc-700 mb-3" />
+                  <p className="text-xs text-zinc-600 font-medium">Record or upload audio to see transcription.</p>
                 </div>
               )}
             </div>
 
             {sttTranscriptResult !== null && sttTranscriptResult.trim() !== '' && !sttTranscriptResult.startsWith('[Error:') && !sttTranscribing && (
-              <div className="flex gap-2 pt-4 border-t border-zinc-850 mt-4">
+              <div className="flex gap-2 pt-4 mt-4 border-t border-white/[0.06]">
                 <Button
                   onClick={handleCopy}
-                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold py-4 rounded-xl text-xs flex items-center justify-center gap-1.5 border border-zinc-750"
+                  className="flex-1 bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 font-semibold py-3 rounded-xl text-xs flex items-center justify-center gap-1.5 border border-white/[0.08]"
                 >
                   {copied ? (
                     <>
@@ -447,7 +450,7 @@ export function STTStudio({
                   ) : (
                     <>
                       <Copy className="h-4 w-4" />
-                      <span>Copy Transcript</span>
+                      <span>Copy transcript</span>
                     </>
                   )}
                 </Button>
@@ -457,21 +460,21 @@ export function STTStudio({
                     setAudioFileName(null)
                   }}
                   variant="outline"
-                  className="border-zinc-800 text-zinc-500 hover:bg-zinc-800 text-xs py-4 px-4 rounded-xl"
+                  className="border-white/[0.08] text-zinc-500 hover:bg-white/[0.06] text-xs py-3 px-4 rounded-xl"
                 >
                   Clear
                 </Button>
               </div>
             )}
             {sttTranscriptResult !== null && (sttTranscriptResult.trim() === '' || sttTranscriptResult.startsWith('[Error:')) && !sttTranscribing && (
-              <div className="flex justify-end pt-3 border-t border-zinc-850 mt-3">
+              <div className="flex justify-end pt-3 mt-3 border-t border-white/[0.06]">
                 <Button
                   onClick={() => {
                     setSttTranscriptResult(null)
                     setAudioFileName(null)
                   }}
                   variant="outline"
-                  className="border-zinc-800 text-zinc-500 hover:bg-zinc-800 text-xs py-2 px-4 rounded-xl"
+                  className="border-white/[0.08] text-zinc-500 hover:bg-white/[0.06] text-xs py-2 px-4 rounded-xl"
                 >
                   Clear
                 </Button>

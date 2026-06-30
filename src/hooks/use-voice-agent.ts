@@ -232,7 +232,7 @@ export function useVoiceAgent() {
         ? {
             label: `LLM (${selectedOption.name})`,
             progress: llmLoadProgress,
-            color: "bg-purple-500",
+            color: "bg-emerald-500",
           }
         : null
 
