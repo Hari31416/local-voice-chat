@@ -7,12 +7,51 @@ A fully local voice AI workbench in your browser — conversational chat, text-t
 **Everything runs in your browser:**
 
 - **Speech-to-Text**: Whisper, Distil-Whisper, Moonshine, or Wav2Vec2 — all via WebGPU/WASM (optional — disable for text-only chat)
-- **Voice Activity Detection**: Silero VAD detects when you're speaking
-- **LLM**: Gemma 4 E2B via Transformers.js + ONNX WebGPU, or Qwen / Llama via WebLLM
+- **Voice Activity Detection**: Silero VAD detects when you're speaking with a robust memory management/tensor disposal flow
+- **LLM**: Gemma 4 E2B, Liquid LFM 2.5 (230M/350M) via custom kernels, Qwen 3.5 (0.8B/2B/4B) via WebGPU, or Qwen/Llama via WebLLM (integrated via AI SDK v6)
 - **Text-to-Speech**: **Supertonic 3** (multilingual) or **Piper** (lightweight per-voice models) — optional for text-only mode
 - **Hindi typing**: Roman-to-Devanagari input via [Lipilekhika](https://www.npmjs.com/package/lipilekhika) in the message box
+- **Active Call Screen**: Immersive fullscreen voice call screen showing pulsing ring animations and shared user/assistant waveforms
+- **Sidebar & Shortcuts**: Collapsible sidebar navigation for quick switching between studios with keyboard shortcuts (`Cmd+B` on macOS, `Ctrl+B` on Windows/Linux)
+- **UI Aesthetics**: Obsidian Signal design system featuring emerald accents, glassmorphic panels, and animated ambient drift backgrounds
+- **Performance Presets**: Instant setup presets (Fast & Light, Balanced, Flagship) alongside collapsible advanced settings for fine-grained LLM parameter configuration
+- **Markdown & Thinking Blocks**: Real-time rendering of LLM thinking blocks and markdown content with a dedicated syntax-highlighting code block viewer and copy-to-clipboard functionality
 
 No data leaves your device. No API keys needed. Pick your models on the setup screen, then talk or type.
+
+## Architecture Overview
+
+WebVoice Studio operates entirely in-browser, combining WebGPU/WASM acceleration, low-latency audio processing, and modular model orchestration. The application processes voice input locally, routes transcripts through local LLMs, and synthesizes audio streams sentence-by-sentence in real time.
+
+```mermaid
+graph TD
+  User([User]) -->|Audio Input| ActiveCall[Active Call Screen / UI]
+  ActiveCall -->|Audio Output| User
+  User -->|Text / Image Input| ChatUI[Chat UI / Empty State]
+  ChatUI -->|Response Display| User
+
+  subgraph Frontend [Frontend - React App]
+    ActiveCall
+    ChatUI
+    Sidebar[Sidebar Navigation / Keyboard Shortcuts]
+    Setup[Setup Screen / Session Blueprint & Presets]
+  end
+
+  subgraph Audio Pipeline
+    Mic[Microphone Input] --> VAD[Silero VAD - Voice Activity Detection]
+    VAD --> STT[STT Worker - Whisper / Moonshine / Wav2Vec2]
+  end
+
+  subgraph AI Engine [Browser-AI Engine - AI SDK v6]
+    STT -->|Transcribed Text| LLM[LLM - Gemma 4 / Qwen 3.5 / LFM 2.5 / WebLLM]
+    ChatUI -->|Text / Image Query| LLM
+    LLM -->|Text Stream / Thinking Block| TTS[TTS Engine - Supertonic 3 / Piper]
+  end
+
+  ActiveCall --> Mic
+  TTS -->|Synthesized Audio| AudioOut[Audio Playback / LED Waveform]
+  AudioOut --> User
+```
 
 ## Three Studios
 
@@ -28,13 +67,19 @@ Each studio loads models on demand with progress tracking. Switching away from V
 
 ## Modes
 
-### Voice mode (STT + TTS enabled)
+### Voice Mode (STT + TTS enabled)
 
-Hands-free or push-to-talk conversation. The LLM uses a concise voice persona (short answers, no markdown). TTS streams sentence-by-sentence as the model generates text. An LED-matrix waveform player shows playback in each assistant bubble.
+Hands-free or push-to-talk conversation. The LLM uses a concise voice persona (short answers, no markdown). TTS streams sentence-by-sentence as the model generates text. An LED-matrix waveform player shows playback in each assistant bubble. Displays an immersive, fullscreen calling screen during active sessions.
 
-### Text-only mode (STT and/or TTS disabled)
+Includes a manual STT **Force Submit** button to instantly transcribe and send captured audio, as well as a **Stop** button in the control bar to halt generation.
 
-Type messages (and optionally attach images with Gemma 4). The LLM uses a richer text persona — longer answers, markdown, lists, and code blocks via `react-markdown`. No microphone required when STT is off.
+### Text-to-Voice Mode
+
+Type text queries but receive synthesized audio responses. This mode is ideal for environments where you cannot speak aloud but still want to listen to the agent's output.
+
+### Text-only Mode (STT and/or TTS disabled)
+
+Type messages (and optionally attach images with Gemma 4 or Qwen 3.5). The LLM uses a richer text persona — longer answers, markdown, lists, and code blocks. No microphone is required. The thinking process is rendered as a collapsible markdown block with custom syntax highlighting for code segments.
 
 ### Hindi & Hinglish
 
@@ -75,6 +120,8 @@ Open [http://localhost:5173](http://localhost:5173) in Chrome or Edge.
 | Wav2Vec2 Large XLSR | ~1.2 GB | First use (if STT enabled) | ✓ IndexedDB |
 | Silero VAD model | ~2 MB | First use (if STT enabled) | ✓ IndexedDB |
 | Gemma 4 E2B LLM | ~3.2 GB | First use (if selected) | ✓ IndexedDB |
+| Qwen 3.5 Models | ~800 MB–4 GB | First use (if selected) | ✓ IndexedDB |
+| Liquid LFM 2.5 Models | ~230–350 MB | First use (if selected) | ✓ IndexedDB |
 | WebLLM models | ~400 MB–2 GB | First use (if selected) | ✓ IndexedDB |
 | Supertonic 3 TTS | ~400 MB | First use (if selected) | ✓ Cache API |
 | Piper TTS voice | ~15–75 MB each | First use (if selected) | ✓ OPFS / browser cache |
@@ -82,14 +129,14 @@ Open [http://localhost:5173](http://localhost:5173) in Chrome or Edge.
 
 First load downloads models based on your setup choices from HuggingFace CDN. After that, everything runs offline.
 
-## Model setup
+## Session Setup
 
-On first launch you pick **LLM**, whether to enable **STT** and **TTS**, **STT model**, **TTS engine** (Supertonic 3 or Piper), **voice**, and **language** before any downloads begin. The setup screen shows estimated download sizes per selection.
+On first launch, you configure your session blueprint using performance presets (**Fast & Light**, **Balanced**, **Flagship**) or adjust parameters manually through the collapsible **Advanced Settings** panel. Here, you choose the **LLM**, toggle **STT** and **TTS**, and configure specific engines and models. The session setup screen shows live download size estimates based on your blueprint selections.
 
-Choices are saved in `localStorage` and can be cleared with **Reset choices** on the setup screen or in the debug panel (gear icon). You can also switch LLM, STT model, voice, and language from the control bar during a session.
+Choices are saved in `localStorage` and can be reset from the setup screen or the debug panel. You can also switch LLM, STT model, voice, and language directly from the control bar during a session.
 
-**Default LLM**: Gemma 4 E2B on desktop; Qwen 0.5B on iOS (WebGPU limitations).  
-**Default STT model**: Whisper Base (Multilingual) — a good balance of size and accuracy.
+**Default LLMs**: Qwen 3.5 0.8B on desktop; Qwen 0.5B on iOS (due to WebGPU limitations).  
+**Default STT Model**: Whisper Base (Multilingual) — offering a balanced compromise between download size and transcription accuracy.
 
 ## Requirements
 
@@ -165,42 +212,43 @@ Uses [@realtimex/piper-tts-web](https://github.com/therealtimex/piper-tts-web) w
 
 ```
 src/
-├── App.tsx                         # Tab shell: Voice Agent / TTS Studio / STT Studio
+├── App.tsx                         # Main shell: collapsible sidebar navigation, active page manager, and voice call overlays
 ├── main.tsx                        # Vite entry point
-├── index.css                       # Tailwind + shadcn theme
+├── index.css                       # Obsidian Signal design system & styles
 ├── components/
-│   ├── setup-screen.tsx            # Pre-download model & voice picker
-│   ├── conversation-area.tsx       # Chat messages + setup / load progress
-│   ├── control-bar.tsx             # Mic, call, text input, LLM/voice controls
-│   ├── voice-agent-top-bar.tsx     # Status, debug panel
-│   ├── warning-banners.tsx         # HTTPS, WebGPU, mobile warnings
-│   ├── message-text.tsx            # Markdown rendering for text-mode replies
-│   ├── hindi-typing-input.tsx      # Lipilekhika Roman → Devanagari input
-│   ├── audio-waveform-player.tsx   # LED-matrix bubble audio player
-│   ├── tts-studio.tsx              # Standalone TTS sandbox
-│   ├── stt-studio.tsx              # Standalone STT sandbox
-│   └── ui/                         # shadcn primitives (button, message, …)
+│   ├── active-call-screen.tsx      # Full-screen calling UI with waveforms & status rings
+│   ├── ambient-background.tsx      # Drifting glassmorphic orbs & mesh background
+│   ├── audio-waveform-player.tsx   # LED-matrix audio player inside bubbles
+│   ├── chat-empty-state.tsx        # Centered welcome panel with prompt suggestion templates
+│   ├── code-block.tsx              # Syntax-highlighted code viewer with clipboard copy
+│   ├── control-bar.tsx             # Call toggle, push-to-talk, stop button, and typing inputs
+│   ├── conversation-area.tsx       # Message list, tool calls, thinking indicators
+│   ├── hindi-typing-input.tsx      # Lipilekhika Roman-to-Devanagari input
+│   ├── message-text.tsx            # Renders markdown-enabled chat responses & thinking logs
+│   ├── page-transition.tsx         # Slide/fade page layout transition wraps
+│   ├── setup-screen.tsx            # Modularized setup entry point routing to setup components
+│   ├── stt-studio.tsx              # Standalone speech-to-text sandbox
+│   ├── tts-studio.tsx              # Standalone text-to-speech sandbox
+│   ├── setup/                      # Setup wizard, presets, advanced panel, and live blueprints
+│   └── ui/                         # shadcn UI components
 ├── hooks/
-│   ├── use-voice-agent.ts          # Orchestrates STT, LLM, TTS, preferences
-│   ├── use-gemma4.ts               # Gemma 4 E2B via Transformers.js (streaming)
-│   ├── use-webllm.ts               # WebLLM / Qwen / Llama fallback
-│   └── use-tts.ts                  # Supertonic 3 + Piper TTS hook (sentence streaming)
+│   ├── use-browser-ai-engine.ts    # Unified browser-ai execution harness (AI SDK v6)
+│   ├── use-voice-agent.ts          # Main orchestrator for mic, VAD, STT, LLM, and TTS
+│   ├── use-gemma4.ts               # Custom webgpu kernel harness for Gemma 4
+│   ├── use-lfm2.ts                 # Custom webgpu kernel harness for Liquid LFM 2.5
+│   ├── use-qwen35.ts               # Qwen 3.5 adapter wrapping use-browser-ai-engine
+│   ├── use-webllm.ts               # WebLLM model adapter wrapping use-browser-ai-engine
+│   └── use-tts.ts                  # Handles sentence streaming to TTS engines
 └── lib/
-    ├── system-prompt.ts            # Voice vs text personas, voice gender rules
-    ├── tts-voices.ts               # Curated voice catalogs + voice profiles
-    ├── user-preferences.ts         # Saved model/voice/STT/TTS choices
-    ├── voice-agent-types.ts        # Shared types
-    ├── voice-agent-constants.ts
-    ├── llm-models.ts               # LLM catalog (Gemma 4, Qwen, Llama)
-    ├── tts.ts                      # TTS provider facade
-    ├── tts-providers/
-    │   ├── supertonic.ts
-    │   └── piper.ts
-    ├── piper/
-    │   ├── rhasspy-session.ts
-    │   └── wav.ts
-    └── supertonic3/
-        └── engine.ts               # Supertonic 3 ONNX inference
+    ├── system-prompt.ts            # Persona prompts & gender system alignments
+    ├── tts-voices.ts               # Catalogs and settings for voice models
+    ├── user-preferences.ts         # Handles browser storage configurations
+    ├── voice-agent-types.ts        # Common voice agent types
+    ├── llm/                        # Models catalog, stream parsers, AI SDK v6 engine logic
+    ├── piper/                      # Rhasspy Piper voice sessions & WAV decoders
+    ├── supertonic3/                # Supertonic 3 TTS engine configurations
+    ├── tools/                      # In-browser system tool registry & executions
+    └── tts-providers/              # Vendor drivers for Supertonic 3 & Piper
 
 public/
 ├── stt-worker-esm.js               # STT worker (Whisper / Distil-Whisper / Moonshine / Wav2Vec2) + VAD
@@ -210,9 +258,11 @@ public/
 
 ## Using a Different LLM
 
-**Gemma 4 E2B** (`onnx-community/gemma-4-E2B-it-ONNX`) is the default on desktop via `@huggingface/transformers` with WebGPU and vision support.
+**Qwen 3.5 0.8B** (`onnx-community/Qwen3.5-0.8B-ONNX-OPT`) and **Gemma 4 E2B** (`google/gemma-4-E2B-it-qat-mobile-transformers`) are supported on desktop via `@huggingface/transformers` with WebGPU.
 
-**WebLLM** models (Qwen 0.5B/1.5B, Llama 3.2 1B/3B) are selectable on the setup screen or from the control bar. iOS defaults to Qwen 0.5B.
+**Liquid LFM 2.5** (230M/350M) runs locally via custom WebGPU kernels.
+
+**WebLLM** models (Qwen 0.5B/1.5B, Llama 3.2 1B/3B) are selectable in the Advanced Settings or control bar. iOS defaults to Qwen 0.5B.
 
 To use a remote API instead, replace the `llm.chat()` call in `use-voice-agent.ts` with a fetch to your endpoint.
 
@@ -222,9 +272,9 @@ To use a remote API instead, replace the `llm.chat()` call in `use-voice-agent.t
 - **UI**: shadcn/ui, Tailwind CSS v4
 - **STT**: Whisper, Distil-Whisper, Moonshine, Wav2Vec2 via @huggingface/transformers (ONNX Runtime Web)
 - **VAD**: Silero VAD via ONNX Runtime
-- **LLM**: Gemma 4 E2B via @huggingface/transformers (WebGPU ONNX); Qwen / Llama via @mlc-ai/web-llm
+- **LLM**: Gemma 4 E2B & Qwen 3.5 via @huggingface/transformers (WebGPU ONNX); Liquid LFM 2.5 via custom kernels; Qwen & Llama via @mlc-ai/web-llm; integrated via AI SDK v6
 - **TTS**: Supertonic 3 or Piper via onnxruntime-web / @realtimex/piper-tts-web
-- **Markdown**: react-markdown + remark-gfm (text-mode replies)
+- **Markdown**: react-markdown + remark-gfm (rendering with syntax-highlighted code blocks)
 - **Hindi input**: lipilekhika (Roman → Devanagari transliteration)
 
 ## License
